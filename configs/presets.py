@@ -82,6 +82,6 @@ def get_diffusion_config(checkpoint_version: int = 1000) -> Config:
     config.environment.set_reset_bounds(
         x_range=(-1.5, 1.5),
         y_range=(-1.5, 1.5),
-        theta_range=(-np.pi/2, np.pi/2) 
+        theta_range=(-np.pi, np.pi) 
     )
     return config

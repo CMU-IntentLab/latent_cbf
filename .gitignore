@@ -136,6 +136,10 @@ visualizations/
 *.jpg
 *.jpeg
 
+
+# Weights & Biases
+wandb/
+
 # Data files
 *.h5
 *.hdf5

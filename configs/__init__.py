@@ -16,6 +16,7 @@ from .controller import ControllerConfig
 from .rendering import RenderingConfig
 from .experiment import ExperimentConfig
 from .base import Config
+from .dreamer_conf import DreamerConfig
 
 # Import presets
 from .presets import (
@@ -43,4 +44,5 @@ __all__ = [
     'get_mpc_config',
     'get_mppi_config',
     'get_diffusion_config'
+    'DreamerConfig'
 ]

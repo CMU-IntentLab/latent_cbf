@@ -257,7 +257,7 @@ class DubinsEnv(gym.Env):
     
     def _update_state(self, action: float):
         """
-        Update agent state using Dubins car dynamics.
+        Update agent state using Dubins car dynamics with RK4 integration.
         
         Args:
             action: Control input angular_velocity (scalar)
@@ -265,17 +265,28 @@ class DubinsEnv(gym.Env):
         omega = action[0]  # Action is now a scalar
         x, y, theta = self.state
         
-        # Dubins car kinematic model
-        x_new = x + self.speed * np.cos(theta) * self.dt
-        y_new = y + self.speed * np.sin(theta) * self.dt
-        theta_new = theta + omega * self.dt
+        # Define the dynamics function f(state, omega)
+        def dynamics(state, omega):
+            x, y, theta = state
+            dx_dt = self.speed * np.cos(theta)
+            dy_dt = self.speed * np.sin(theta)
+            dtheta_dt = omega
+            return np.array([dx_dt, dy_dt, dtheta_dt])
+        
+        # RK4 integration
+        k1 = dynamics(self.state, omega)
+        k2 = dynamics(self.state + 0.5 * self.dt * k1, omega)
+        k3 = dynamics(self.state + 0.5 * self.dt * k2, omega)
+        k4 = dynamics(self.state + self.dt * k3, omega)
+        
+        # Update state using RK4 formula
+        state_new = self.state + (self.dt / 6.0) * (k1 + 2*k2 + 2*k3 + k4)
         
         # Normalize angle to [-pi, pi]
-        theta_new = np.arctan2(np.sin(theta_new), np.cos(theta_new))
+        state_new[2] = np.arctan2(np.sin(state_new[2]), np.cos(state_new[2]))
+        
         # Update state
-        self.state = np.array([x_new, y_new, theta_new], dtype=np.float32)
-        
-        
+        self.state = state_new.astype(np.float32)
     
     def _calculate_reward(self, action: float) -> float:
         """

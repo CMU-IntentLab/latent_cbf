@@ -23,7 +23,7 @@ class ControllerConfig:
     checkpoint_path: str = "/data/dubins/test/diffusion_test.ckpt"
     config_path: str = "/data/dubins/test/diffusion_test/dubins_robomimic_2025-10-02_18-28-09/"
     checkpoint_version: int = 1000  # For diffusion_test_latest{i}.ckpt format
-    device: str = "cuda"
+    device: str = "cuda:0"
     action_chunk_size: int = 8
     total_chunk_size: int = 16
     eval_diffusion_steps: int = 16

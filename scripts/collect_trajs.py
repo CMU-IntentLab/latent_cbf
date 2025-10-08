@@ -101,6 +101,7 @@ class TrajectoryCollector:
         states = [np.array([info['agent_position'][0], info['agent_position'][1], info['agent_orientation']])]
         actions = []
         rewards = []
+        collisions = []
         observations = [obs] if save_images else []
         infos = [info.copy()]
         
@@ -133,6 +134,7 @@ class TrajectoryCollector:
             states.append(np.array([info['agent_position'][0], info['agent_position'][1], info['agent_orientation']]))
             rewards.append(float(reward))
             infos.append(info.copy())
+            collisions.append(info.get('collision', False))
             
             if save_images:
                 observations.append(obs)
@@ -151,13 +153,14 @@ class TrajectoryCollector:
             'rewards': np.array(rewards),  # Shape: (T,)
             'observations': np.array(observations) if save_images else None,  # Shape: (T+1, H, W, 3) or None
             'success': infos[-1].get('goal_reached', False),
-            'collision': any(info.get('collision', False) for info in infos),
+            'collision': np.array(collisions),
             'steps': len(actions),
             'total_reward': np.sum(rewards),
             'final_distance_to_goal': infos[-1]['goal_distance'],
             'infos': infos
         }
-        
+        if trajectory_data['rewards'].shape[0] <= 3:
+            return self.collect_single_trajectory(episode_idx, seed+1, initial_state, max_steps, save_images)
         return trajectory_data
     
     def collect_trajectories(self, 
@@ -216,7 +219,7 @@ class TrajectoryCollector:
         
         if verbose:
             success_rate = np.mean([t['success'] for t in trajectories])
-            collision_rate = np.mean([t['collision'] for t in trajectories])
+            collision_rate = np.mean([t['collision'].any() for t in trajectories])
             avg_steps = np.mean([t['steps'] for t in trajectories])
             avg_reward = np.mean([t['total_reward'] for t in trajectories])
             
@@ -286,7 +289,7 @@ class TrajectoryCollector:
             # Aggregate statistics
             stats_group = f.create_group('statistics')
             success_rate = np.mean([t['success'] for t in trajectories])
-            collision_rate = np.mean([t['collision'] for t in trajectories])
+            collision_rate = np.mean([t['collision'].any() for t in trajectories])
             avg_steps = np.mean([t['steps'] for t in trajectories])
             avg_reward = np.mean([t['total_reward'] for t in trajectories])
             
@@ -317,6 +320,8 @@ class TrajectoryCollector:
                 traj_subgroup.create_dataset('rewards', data=traj['rewards'],
                                            compression=compression, compression_opts=compression_opts)
                 
+                traj_subgroup.create_dataset('failures', data=traj['collision'],
+                                           compression=compression, compression_opts=compression_opts)                
                 # Images (if available)
                 if traj['observations'] is not None:
                     traj_subgroup.create_dataset('observations', data=traj['observations'],
@@ -422,7 +427,7 @@ def main():
                        choices=['default', 'mpc', 'mppi',
                                'diffusion', 'no_obstacles', 'narrow_gap', 'debug'],
                        help='Configuration preset to use')
-    parser.add_argument('--output_dir', type=str, default='/data/dubins', help='Output directory')
+    parser.add_argument('--output_dir', type=str, default='/data/dubins/trajs', help='Output directory')
     parser.add_argument('--filename', type=str, default='trajectories', help='Output filename (without extension)')
     parser.add_argument('--save_images', action='store_true', help='Save image observations')
     parser.add_argument('--compress', action='store_true', default=True, help='Use HDF5 compression')
@@ -467,32 +472,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # Example usage
-    if len(os.sys.argv) == 1:
-        # Default example run
-        print("Running example trajectory collection...")
-        
-        # Collect MPC trajectories
-        config = get_mpc_config()
-        collector = TrajectoryCollector(config, "/data")
-        
-        try:
-            trajectories = collector.collect_trajectories(
-                n_trajectories=50,
-                save_images=False,
-                verbose=True
-            )
-            
-            filepath = collector.save_to_hdf5(trajectories, "mpc_trajectories")
-            
-            # Test loading
-            print("\nTesting data loading...")
-            loaded_trajectories, metadata = load_trajectories_from_hdf5(filepath)
-            print(f"Successfully loaded {len(loaded_trajectories)} trajectories")
-            print(f"Success rate: {metadata['statistics']['success_rate']:.1%}")
-            
-        finally:
-            collector.close()
-    else:
-        # Command-line usage
-        main()
+    main()
