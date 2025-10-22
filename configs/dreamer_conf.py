@@ -5,7 +5,7 @@ class DreamerConfig:
     seed: int = 0
     deterministic_run: bool = False
     logdir: str = '/data/dubins/test/dreamer'
-    steps: int = 10_000
+    steps: int = 40_000
     eval_every: int = 1_000
     eval_episode_num: int = 10
     log_every: int = 1_000
@@ -18,13 +18,17 @@ class DreamerConfig:
     action_repeat: int = 1
 
     dataset_path: str = '/data/dubins/buffers/dreamer_buffer.h5'
-    num_train_trajs: int = 3800
-    num_val_trajs: int = 200
+    num_train_trajs: float = 0.8
+    
+    # World Model Prediction Settings
+    wm_checkpoint_path: str = '/data/dubins/test/dreamer/rssm_ckpt.pt'
+    use_wm_prediction: bool = True
+    wm_history_length: int = 8  # Number of timesteps of history to use for prediction
 
     dyn_hidden: int = 512
     dyn_deter: int = 512
     dyn_stoch: int = 32
-    dyn_discrete: int = 32
+    dyn_discrete: int = 0 
     dyn_rec_depth: int = 1
     dyn_mean_act: str = 'none'
     dyn_std_act: str = 'sigmoid2'
@@ -57,7 +61,6 @@ class DreamerConfig:
     margin_head:  Dict[str, Any] = field(default_factory=lambda:{'layers': 2, 'loss_scale': 1.0})
     grad_heads: List[str] = field(default_factory=lambda: ['decoder', 'cont'])
 
-    rssm_train_steps: int = 10000
 
     discount: float = 0.997
     discount_lambda: float = 0.95
@@ -67,6 +70,64 @@ class DreamerConfig:
     eval_state_mean: bool = False
     
     gamma_lx: float = 0.75
+    debug: bool = False
+    gradient_thresh: float = 0.1
+    zs_weight: float = 0.1
+    relu_weight: float = 1.0
+    gp_weight: float = 10.0
+
+
+    reward_threshold: Optional[float] = None
+    buffer_size: int = 40000
+    actor_lr: float = 1e-4
+    critic_lr: float = 1e-3
+    gamma_pyhj: float = 0.9999 # type=float, default=0.95)
+    tau: float = 0.005 # type=float, default=0.005)
+    exploration_noise: float = 0.1 # type=float, default=0.1)
+    epoch: int = 1 # type=int, default=10)
+    total_episodes: int = 20 # type=int, default=160)
+    step_per_epoch: int = 40000 # type=int, default=40000)
+    step_per_collect: int = 8 # type=int, default=8)
+    update_per_step: float = 0.125 # type=float, default=0.125)
+    batch_size_pyhj: int = 512 # type=int, default=512)
+    control_net: List[int] = field(default_factory=lambda: [ 512, 512, 512]) # type=int, nargs="*", default=None) # for control policy
+    critic_net: List[int] = field(default_factory=lambda: [512, 512, 512])  # type=int, nargs="*", default=None) # for critic net
+    training_num: int = 1 # type=int, default=8)
+    test_num: int = 1 # type=int, default=100)
+    render: float = 0. # type=float, default=0.)
+    rew_norm: bool = False # action="store_true", default=False)
+    n_step: int = 1 # type=int, default=1)
+    continue_training_logdir: Optional[str] = None # type=str, default=None)
+    continue_training_epoch: Optional[int] = None # type=int, default=None)
+    actor_gradient_steps: int = 1 # type=int, default=1)
+    is_game_baseline: bool = False # type=bool, default=False) # it will be set automatically
+    target_update_freq: int = 400 # type=int, default=400)
+    auto_alpha: float = 1
+    alpha_lr: float = 3e-4
+    alpha: float = 0.2
+    weight_decay_pyhj: float = 0.001
+    actor_activation: str = "ReLU" #type=str, default="ReLU")
+    critic_activation: str = "ReLU"
+    warm_start_path: Optional[str] = None # type=str, default=None)
+    kwargs: Dict[str, Any] = field(default_factory=lambda: {}) # type=str, default="")
+
+    gamma_lx: float = 0.75
+    offline_data_path: str = '/home/kensuke/ManiSkill/examples/baselines/ppo/runs/BlockTopple-v0__ppo_rgb__1__1753308792/test_videos/trajectory.rgb.pd_ee_delta_pose.physx_cuda.h5'
+    pretrain: int = 500
+    hybrid_steps: int = 1_000_000
+    hybrid: bool = True
+
+
+    no_gp: bool = False
+    rssm_ckpt_path: str = "/data/dubins/test/dreamer/rssm_ckpt.pt"
+    filter_directory_gp: str = '/data/dubins/test/dreamer/PyHJ/gp/epoch_id_15/policy.pth'
+    filter_directory_nogp: str = '/data/dubins/test/dreamer/PyHJ/nogp/epoch_id_15/policy.pth'
+    num_runs: int = 1
+    cbf_gamma: float = 0.9
+    lr_thresh: float = 0.3
+    filter_mode: str = 'cbf' # 'cbf' or 'lr' or 'none'
+
+    task: str = 'dubins-wm'
     '''# Dreamer config
     parallel: bool = True
     eval_every: int = 10_000

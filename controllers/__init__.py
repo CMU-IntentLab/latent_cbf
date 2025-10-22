@@ -10,14 +10,17 @@ This package provides various controllers for the Dubins car environment:
 
 from .simple_controller import SimpleController
 from .mpc_controller import MPCController
+from .random_controller import RandomController
 from .mppi_controller import MPPIController
-from .diffusion_controller import DiffusionController
+from .diffusion_controller import DiffusionController, FilteredDiffusionController
 from .factory import create_controller_from_config
 
 __all__ = [
     'SimpleController',
     'MPCController', 
+    'RandomController',
     'MPPIController',
     'DiffusionController',
+    'FilteredDiffusionController',
     'create_controller_from_config'
 ]

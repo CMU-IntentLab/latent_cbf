@@ -7,6 +7,7 @@ from .simple_controller import SimpleController
 from .mpc_controller import MPCController
 from .mppi_controller import MPPIController
 from .diffusion_controller import DiffusionController
+from .random_controller import RandomController
 
 
 def create_controller_from_config(config) -> Union[SimpleController, MPCController, MPPIController, DiffusionController]:
@@ -33,6 +34,11 @@ def create_controller_from_config(config) -> Union[SimpleController, MPCControll
             control_weight=ctrl_config.control_weight,
             obstacle_safety_margin=ctrl_config.obstacle_safety_margin,
             goal_tolerance=ctrl_config.goal_tolerance
+        )
+    elif ctrl_config.controller_type == "random":
+        return RandomController(
+            max_angular_velocity=config.environment.max_angular_velocity,
+            seed=getattr(ctrl_config, 'seed', None)
         )
     elif ctrl_config.controller_type == "mppi":
         return MPPIController(

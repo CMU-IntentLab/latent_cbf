@@ -604,6 +604,7 @@ class MLP(nn.Module):
         outscale=1.0,
         symlog_inputs=False,
         device="cuda",
+        return_dist=True,
         name="NoName",
     ):
         super(MLP, self).__init__()
@@ -620,6 +621,7 @@ class MLP(nn.Module):
         self._unimix_ratio = unimix_ratio
         self._symlog_inputs = symlog_inputs
         self._device = device
+        self._return_dist = return_dist
 
         self.layers = nn.Sequential()
         for i in range(layers):
@@ -634,10 +636,6 @@ class MLP(nn.Module):
             if i == 0:
                 inp_dim = units
 
-        if name == "Margin":
-            self.layers.add_module(
-                f"{name}_linear{i+1}", nn.Linear(units, 1, bias=False)
-            )
             
         self.layers.apply(tools.weight_init)
 
@@ -665,6 +663,13 @@ class MLP(nn.Module):
         if self._symlog_inputs:
             x = tools.symlog(x)
         out = self.layers(x)
+
+        if not self._return_dist:
+            if self._shape is not None:
+                mean = self.mean_layer(out)
+                return mean.view(mean.shape[0]) if self._shape == () else mean
+            else:
+                return out
         # Used for encoder output
         if self._shape is None:
             return out

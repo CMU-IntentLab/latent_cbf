@@ -24,8 +24,10 @@ from .presets import (
     get_no_obstacles_config,
     get_debug_config,
     get_mpc_config,
+    get_random_config,
     get_mppi_config,
-    get_diffusion_config
+    get_diffusion_config,
+    get_diffusion_wm_config,
 )
 
 __all__ = [
@@ -42,7 +44,10 @@ __all__ = [
     'get_narrow_gap_config',
     'get_debug_config',
     'get_mpc_config',
+    'get_random_config',
     'get_mppi_config',
-    'get_diffusion_config'
+    'get_diffusion_config',
+    'get_diffusion_wm_config',
+
     'DreamerConfig'
 ]

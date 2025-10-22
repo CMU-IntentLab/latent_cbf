@@ -281,7 +281,7 @@ def save_checkpoint(
 
     return best_score
 
-def fill_offline_dataset(config, cache, is_val_set=False):
+def fill_offline_dataset(config, cache, eval_cache):
     dataset_path = config.dataset_path
     
     with h5py.File(dataset_path, 'r') as f:
@@ -291,13 +291,20 @@ def fill_offline_dataset(config, cache, is_val_set=False):
         num_trajs = len(trajectories.keys())
         print(f"Number of trajectories: {num_trajs}")
 
-        num_train = config.num_train_trajs
-        
+        num_train = int(config.num_train_trajs*num_trajs)
+        num_eval = num_trajs - num_train
+        # Calculate step size and create evenly spaced indices
+        step = (num_trajs - 1) / (num_eval - 1) if num_eval > 1 else 0
+        eval_idx = np.arange(0, num_trajs, step, dtype=int)
+        assert num_train <= num_trajs, f"num_train {num_train} must be less than num_trajs {num_trajs}"
         pixel_keys = sorted(['image'])
         state_keys = sorted(['obs_state'])
 
 
         traj_keys = list(trajectories.keys())
+        train_count = 0
+        eval_count = 0
+
         for i in tqdm(
             range(num_trajs),
             desc="Loading in expert data",
@@ -305,12 +312,6 @@ def fill_offline_dataset(config, cache, is_val_set=False):
             leave=False,
             total=num_trajs,
         ):
-            # if is_val_set, we don't fill the first num_train_trajs which are used for training
-            if i < num_train and is_val_set:
-                continue
-            elif i >= num_train and not is_val_set:
-                break
-            
             key = traj_keys[i]
             traj = trajectories[key]
 
@@ -352,20 +353,28 @@ def fill_offline_dataset(config, cache, is_val_set=False):
                     transition["discount"] = np.array(1, dtype=np.float32)
                     transition["action"] = np.array([actions[t-1]], dtype=np.float32)
                     
-                add_to_cache(cache, f"exp_traj_{i}", transition)
+
+                if i in eval_idx:
+                    add_to_cache(eval_cache, f"exp_traj_{i}", transition)
+                if i not in eval_idx:
+                    add_to_cache(cache, f"exp_traj_{i}", transition)
                 
-        if not is_val_set:
-            cprint(
-                f"Loading expert buffer with {config.num_train_trajs} trajectories from {dataset_path}",
-                color="magenta",
-                attrs=["bold"],
-            )
-        else:
-            cprint(
-                f"Loading validation buffer with {len(demos) - config.num_train_trajs}",
-                color="magenta",
-                attrs=["bold"],
-            )
+            if i in eval_idx:
+                eval_count += 1
+            else:
+                train_count += 1
+        
+        cprint(
+            f"Loading expert buffer with {train_count} trajectories from {dataset_path}",
+            color="magenta",
+            attrs=["bold"],
+        )
+        
+        cprint(
+            f"Loading validation buffer with {eval_count}",
+            color="magenta",
+            attrs=["bold"],
+        )
 
 
 def simulate(

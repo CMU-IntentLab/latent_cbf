@@ -41,6 +41,19 @@ def get_mpc_config() -> Config:
     config.experiment.video_filename = "video/mpc_trajectory.mp4"
     return config
 
+def get_random_config() -> Config:
+    """Get random controller configuration for data collection."""
+    config = get_default_config()
+    config.controller.controller_type = "random"
+    config.controller.seed = 0  # Set seed for reproducible random behavior
+    # You might want different environment settings for random data collection
+    config.environment.set_reset_bounds(
+        x_range=(-1.5, 1.5),
+        y_range=(-1.5, 1.5),
+        theta_range=(-np.pi, np.pi)
+    )
+    
+    return config
 
 def get_mppi_config() -> Config:
     """Get configuration using MPPI controller."""
@@ -54,7 +67,7 @@ def get_mppi_config() -> Config:
     config.controller.goal_weight = 10.0
     config.controller.obstacle_weight = 10.0
     config.controller.control_weight = 0.01
-    config.controller.obstacle_safety_margin = -0.01
+    config.controller.obstacle_safety_margin = 0.05
     config.controller.goal_tolerance = 0.1
     config.controller.adaptive_temperature = True
     config.experiment.video_filename = "video/mppi_trajectory.mp4"
@@ -84,4 +97,25 @@ def get_diffusion_config(checkpoint_version: int = 1000) -> Config:
         y_range=(-1.5, 1.5),
         theta_range=(-np.pi, np.pi) 
     )
+    return config
+
+
+def get_diffusion_wm_config(checkpoint_version: int = 1000, wm_checkpoint_path: str = '/data/dubins/test/dreamer/rssm_ckpt.pt') -> Config:
+    """Get diffusion policy configuration with world model prediction enabled."""
+    config = get_diffusion_config(checkpoint_version)
+    config.controller.controller_type = "diffusion_wm"
+
+    # Enable world model prediction
+    config.wm_config = {
+        'use_wm_prediction': True,
+        'wm_checkpoint_path': wm_checkpoint_path,
+        'wm_history_length': 8
+    }
+    
+    config.environment.set_reset_bounds(
+        x_range=(-1.5, -1),
+        y_range=(-1., 1.),
+        theta_range=(-np.pi, np.pi) 
+    )
+    config.experiment.video_filename = f"video/diffusion_wm_trajectory_ckpt{checkpoint_version}.mp4"
     return config

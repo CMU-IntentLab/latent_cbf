@@ -45,8 +45,8 @@ class EnvironmentConfig:
     
     # Obstacles
     obstacles: List[ObstacleConfig] = field(default_factory=lambda: [
-        ObstacleConfig(x=0.0, y=0.65, radius=0.5),
-        ObstacleConfig(x=0.0, y=-0.65, radius=0.5)
+        ObstacleConfig(x=0.25, y=0.65, radius=0.5),
+        ObstacleConfig(x=0.25, y=-0.65, radius=0.5)
     ])
     
     def get_obstacles_list(self) -> List[Tuple[float, float, float]]:

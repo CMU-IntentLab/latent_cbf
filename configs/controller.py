@@ -28,4 +28,5 @@ class ControllerConfig:
     total_chunk_size: int = 16
     eval_diffusion_steps: int = 16
     
+    seed: int = None  # Random seed for reproducible behavior
     # Note: max_angular_velocity is now inherited from environment config

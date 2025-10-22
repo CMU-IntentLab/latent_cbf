@@ -71,6 +71,7 @@ class DubinsEnv(gym.Env):
         self.x_min, self.x_max, self.y_min, self.y_max = world_bounds
         self.obstacles = obstacles or []
         self.goal_position = goal_position or (self.x_max - 1.0, self.y_max - 1.0)
+        self.goal_position_init = goal_position or (self.x_max - 1.0, self.y_max - 1.0)
         
         # State variables
         self.state = None  # [x, y, theta] - position and orientation
@@ -124,6 +125,8 @@ class DubinsEnv(gym.Env):
         
         # Reset step counter
         self.step_count = 0
+        self.goal_position = np.array(self.goal_position_init)
+        self.goal_position[1] += np.random.uniform(-0.6, 0.6)
         
         # Initialize agent state
         self.state = self._sample_initial_state(options)
@@ -302,7 +305,7 @@ class DubinsEnv(gym.Env):
         
         # Distance to goal reward
         goal_distance = np.linalg.norm(self.state[:2] - np.array(self.goal_position))
-        reward += -0.1 * goal_distance  # Negative distance encourages approaching goal
+        reward += -1. * goal_distance  # Negative distance encourages approaching goal
         
         # Goal reached reward
         if goal_distance <= self.goal_radius:
@@ -310,7 +313,7 @@ class DubinsEnv(gym.Env):
         
         # Collision penalty
         if self._check_collision(self.state):
-            reward += -100.0
+            reward += -1.0 * np.random.rand()
         
         # Action penalty (encourage smooth control)
         omega = action[0]  # Action is now a scalar
@@ -459,8 +462,8 @@ class DubinsEnv(gym.Env):
         angle_rad = -angle_rad
         
         # Agent visual parameters (matching dubin_multiobs_render.py)
-        length = 17.5 * scale / 2
-        width = 10 * scale / 2
+        length = 20 * scale / 2
+        width = 12 * scale / 2
         radius = width / 2
         
         # Calculate tip position

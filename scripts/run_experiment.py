@@ -19,7 +19,7 @@ from configs import (Config, get_default_config, get_no_obstacles_config,
                    get_debug_config, get_mpc_config, get_mppi_config,
                    get_diffusion_config)
 from dubins_env import DubinsEnv
-from controllers import SimpleController, MPCController, MPPIController, DiffusionController
+from controllers import SimpleController, MPCController, RandomController, MPPIController, DiffusionController
 
 
 def create_env_from_config(config: Config) -> DubinsEnv:
@@ -50,12 +50,13 @@ def create_env_from_config(config: Config) -> DubinsEnv:
     )
 
 
-def create_controller_from_config(config: Config):
+def create_controller_from_config(config: Config, wm_predictor=None):
     """
     Create a controller from configuration (Simple, MPC, MPPI, or Diffusion).
     
     Args:
         config: Configuration object
+        wm_predictor: Optional world model predictor for safety evaluation
         
     Returns:
         Configured controller instance (SimpleController, MPCController, MPPIController, or DiffusionController)
@@ -74,6 +75,11 @@ def create_controller_from_config(config: Config):
             control_weight=ctrl_config.control_weight,
             obstacle_safety_margin=ctrl_config.obstacle_safety_margin,
             goal_tolerance=ctrl_config.goal_tolerance
+        )
+    elif ctrl_config.controller_type == "random":
+        return RandomController(
+            max_angular_velocity=config.environment.max_angular_velocity,
+            seed=ctrl_config.seed
         )
     elif ctrl_config.controller_type == "mppi":
         return MPPIController(
@@ -99,7 +105,8 @@ def create_controller_from_config(config: Config):
             device=ctrl_config.device,
             action_chunk_size=ctrl_config.action_chunk_size,
             total_chunk_size=ctrl_config.total_chunk_size,
-            eval_diffusion_steps=ctrl_config.eval_diffusion_steps
+            eval_diffusion_steps=ctrl_config.eval_diffusion_steps,
+            wm_predictor=wm_predictor
         )
     else:  # simple controller
         return SimpleController(

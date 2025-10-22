@@ -557,7 +557,7 @@ def visualize_from_file(filepath: str, output_dir: str = "visualizations"):
 def main():
     """Main function for command-line usage."""
     parser = argparse.ArgumentParser(description='Visualize trajectories from HDF5 files')
-    parser.add_argument('--filepath', type=str, default='/data/dubins/dubins_gap.h5', help='Path to HDF5 trajectory file')
+    parser.add_argument('--filepath', type=str, default='/data/dubins/trajs/dubins_gap.h5', help='Path to HDF5 trajectory file')
     parser.add_argument('--output_dir', type=str, default='visualizations', 
                        help='Output directory for visualizations')
     parser.add_argument('--show_interactive', action='store_true', 

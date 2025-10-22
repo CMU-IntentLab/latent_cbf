@@ -221,12 +221,12 @@ class MPPIController:
                 
                 # Exponential penalty for violations
                 violations = safe_distance - obs_distances
-                exp_penalties = self.w_obstacle * np.exp(violations * 5.0)
+                exp_penalties = self.w_obstacle * np.exp(violations * 5.0) * np.random.rand()
                 exp_penalties = np.where(violation_mask, exp_penalties, 0)
                 
                 # Soft constraint for non-violations
                 soft_violations = np.maximum(0, safe_distance * 1.5 - obs_distances)
-                soft_penalties = self.w_obstacle * 1. * soft_violations**2
+                soft_penalties = 1. * soft_violations**2 * np.random.rand()
                 soft_penalties = np.where(~violation_mask, soft_penalties, 0)
                 
                 # Sum over time steps

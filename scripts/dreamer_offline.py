@@ -62,7 +62,7 @@ class Dreamer(nn.Module):
         config = self._config
         use_amp = True if config.precision == 16 else False
         if (
-            config.rssm_train_steps > 0
+            config.steps > 0
             or config.from_ckpt is not None
         ):
             # have separate lrs/eps/clips for actor and model
@@ -80,7 +80,6 @@ class Dreamer(nn.Module):
                 + list(self._wm.dynamics.parameters())
             }
             model_params["params"] += list(self._wm.heads["decoder"].parameters())
-            model_params["params"] += list(self._wm.heads["margin"].parameters())
             
             self.pretrain_params = list(model_params["params"]) + list(
             )
@@ -89,6 +88,29 @@ class Dreamer(nn.Module):
             )
             print(
                 f"Optimizer pretrain has {sum(param.numel() for param in self.pretrain_params)} variables."
+            )
+
+            margin_nogp_params = {
+                "params": list(self._wm.heads["margin_nogp"].parameters())
+            }
+            margin_gp_params = {
+                    "params": list(self._wm.heads["margin_gp"].parameters())
+                }
+
+            self.margin_nogp_params = list(margin_nogp_params["params"])
+            self.margin_gp_params = list(margin_gp_params["params"])
+
+            self.margin_nogp_opt = tools.Optimizer(
+                "margin_nogp_opt", [margin_nogp_params], **standard_kwargs)
+            self.margin_gp_opt = tools.Optimizer(
+                "margin_gp_opt", [margin_gp_params], **standard_kwargs)
+
+            print(
+                f"Optimizer margin_nogp has {sum(p.numel() for p in self.margin_nogp_params)} trainable variables."
+            )
+
+            print(
+                f"Optimizer margin_gp has {sum(p.numel() for p in self.margin_gp_params)} trainable variables."
             )
 
     def _update_running_metrics(self, metrics):
@@ -117,22 +139,59 @@ class Dreamer(nn.Module):
             if logged:
                 self._logger.write(fps=True)
 
-    def train_rssm(self, data, step=None):
-        metrics = {}
+    def rssm_step(self, data, step=None, training=True):
+        """Unified function for both training and evaluation"""
         wm = self._wm
         data = wm.preprocess(data)
         
-        with tools.RequiresGrad(wm):
+        # Train/eval world model and get shared data
+        wm_metrics, post, prior = self._world_model_step(data, step, training)
+        
+        post_detached = {k: v.detach() for k, v in post.items()}
+        feat_detached = wm.dynamics.get_feat(post_detached).detach()
+        safe_data = torch.where(data["failure"] == 0.)
+        unsafe_data = torch.where(data["failure"] == 1.)
+        safe_dataset = feat_detached[safe_data]
+        unsafe_dataset = feat_detached[unsafe_data]
+
+        # Train/eval margin heads
+        margin_gp_metrics = self._margin_gp_step(safe_dataset, unsafe_dataset, training)
+        margin_nogp_metrics = self._margin_nogp_step(safe_dataset, unsafe_dataset, training)
+        
+        # Combine all metrics
+        metrics = {}
+        metrics.update(wm_metrics)
+        metrics.update(margin_gp_metrics)
+        metrics.update(margin_nogp_metrics)
+        
+        # Add appropriate prefix
+        prefix = "model_only_pretrain" if training else "model_only_eval"
+        metrics = {f"{prefix}/{k}": v for k, v in metrics.items()}
+        
+        if training:
+            self._update_running_metrics(metrics)
+            self._maybe_log_metrics()
+            self._step += 1
+            self._logger.step = self._step
+        else:
+            return metrics
+
+    def _world_model_step(self, data, step, training=True):
+        """Unified world model training/evaluation"""
+        metrics = {}
+        wm = self._wm
+        
+        # Choose context manager based on training mode
+        grad_context = tools.RequiresGrad(wm) if training else torch.no_grad()
+        
+        with grad_context:
             with torch.amp.autocast("cuda", enabled=wm._use_amp):
                 embed = wm.encoder(data)
-                # post: z_t, prior: \hat{z}_t
-                post, prior = wm.dynamics.observe(
-                    embed, data["action"], data["is_first"]
-                )
+                post, prior = wm.dynamics.observe(embed, data["action"], data["is_first"])
+                
                 kl_free = self._config.kl_free
                 dyn_scale = self._config.dyn_scale
                 rep_scale = self._config.rep_scale
-                # note: kl_loss is already sum of dyn_loss and rep_loss
                 kl_loss, kl_value, dyn_loss, rep_loss = wm.dynamics.kl_loss(
                     post, prior, kl_free, dyn_scale, rep_scale
                 )
@@ -141,12 +200,10 @@ class Dreamer(nn.Module):
                 losses = {}
                 feat = wm.dynamics.get_feat(post)
 
-                
-
-                if (step <= self._config.rssm_train_steps):
+                if (step is None or step <= self._config.steps):
                     preds = {}
                     for name, head in wm.heads.items():
-                        if name != "margin":
+                        if "margin" not in name:
                             grad_head = name in self._config.grad_heads
                             feat = wm.dynamics.get_feat(post)
                             feat = feat if grad_head else feat.detach()
@@ -155,65 +212,168 @@ class Dreamer(nn.Module):
                                 preds.update(pred)
                             else:
                                 preds[name] = pred
-                    # preds is dictionary of all all MLP+CNN keys
+                    
                     for name, pred in preds.items():
                         if name == "cont":
                             cont_loss = -pred.log_prob(data[name])
-                        elif name != "margin":
+                        elif "margin" not in name:
                             loss = -pred.log_prob(data[name])
                             assert loss.shape == embed.shape[:2], (name, loss.shape)
                             losses[name] = loss
-                        
                     recon_loss = sum(losses.values())
-                    # failure margin
-                    failure_data = data["failure"]
-                    safe_data = torch.where(failure_data == 0.)
-                    unsafe_data = torch.where(failure_data == 1.)
-                    safe_dataset = feat[safe_data]
-                    unsafe_dataset = feat[unsafe_data]
-                    pos = wm.heads["margin"](safe_dataset)
-                    neg = wm.heads["margin"](unsafe_dataset)
-                    
-                    gamma = self._config.gamma_lx
-                    lx_loss = 0.0
-                    if pos.numel() > 0:
-                        lx_loss += torch.relu(gamma - pos).mean()
-                    if neg.numel() > 0:
-                        lx_loss += torch.relu(gamma + neg).mean()
-
-                    lx_loss *=  self._config.margin_head["loss_scale"]
-                    if step < 3000:
-                        lx_loss *= 0
-                        cont_loss *= 0
-            
-
-                model_loss = kl_loss + recon_loss + lx_loss + cont_loss
-                metrics = self.pretrain_opt(
-                    torch.mean(model_loss), self.pretrain_params
-                )
+                else:
+                    recon_loss = torch.tensor(0.0, device=embed.device)
+                    cont_loss = torch.tensor(0.0, device=embed.device)
+                
+                model_loss = kl_loss + recon_loss + cont_loss
+                
+                # Only optimize if training
+                if training:
+                    metrics.update(self.pretrain_opt(torch.mean(model_loss), self.pretrain_params))
+        
+        # Add metrics
         metrics.update({f"{name}_loss": to_np(loss) for name, loss in losses.items()})
         metrics["kl_loss"] = to_np(kl_loss)
         metrics["dyn_loss"] = to_np(dyn_loss)
         metrics["rep_loss"] = to_np(rep_loss)
         metrics["kl_value"] = to_np(torch.mean(kl_value))
-        metrics["lx_loss"] = to_np(lx_loss)
         metrics["cont_loss"] = to_np(cont_loss)
+        if not training:
+            metrics["model_loss"] = to_np(model_loss)
 
-        with torch.amp.autocast("cuda", enabled=wm._use_amp):
-            metrics["prior_ent"] = to_np(
-                torch.mean(wm.dynamics.get_dist(prior).entropy())
-            )
-            metrics["post_ent"] = to_np(
-                torch.mean(wm.dynamics.get_dist(post).entropy())
-            )
-        metrics = {
-            f"model_only_pretrain/{k}": v for k, v in metrics.items()
-        }  # Add prefix model_pretrain to all metrics
-        self._update_running_metrics(metrics)
-        self._maybe_log_metrics()
-        self._step += 1
-        self._logger.step = self._step
-    
+        with torch.no_grad():
+            with torch.amp.autocast("cuda", enabled=wm._use_amp):
+                metrics["prior_ent"] = to_np(torch.mean(wm.dynamics.get_dist(prior).entropy()))
+                metrics["post_ent"] = to_np(torch.mean(wm.dynamics.get_dist(post).entropy()))
+        
+        return metrics, post, prior
+
+    def _margin_gp_step(self, safe_dataset, unsafe_dataset, training=True):
+        """Unified margin GP training/evaluation"""
+        metrics = {}
+        wm = self._wm
+        
+        # Choose context manager based on training mode
+        grad_context = tools.RequiresGrad(wm.heads["margin_gp"])
+        
+        with grad_context:
+            with torch.amp.autocast("cuda", enabled=wm._use_amp):
+                pos = wm.heads["margin_gp"](safe_dataset)
+                neg = wm.heads["margin_gp"](unsafe_dataset)
+                
+                N = max(pos.numel(), neg.numel())
+                gp_loss = torch.tensor(0., device=pos.device)
+                
+                if pos.numel() > 0 and neg.numel() > 0:
+                    # Handle dataset balancing (same logic for both modes)
+                    if N > safe_dataset.shape[0]:
+                        repeat_times = (N + safe_dataset.shape[0] - 1) // safe_dataset.shape[0]
+                        safe_repeated = safe_dataset.repeat((repeat_times,) + (1,) * (safe_dataset.dim() - 1))
+                        indices = torch.randperm(safe_repeated.shape[0], device=safe_dataset.device)[:N]
+                        pos_data = safe_repeated[indices]
+                    else:
+                        pos_data = safe_dataset
+                        
+                    if N > unsafe_dataset.shape[0]:
+                        repeat_times = (N + unsafe_dataset.shape[0] - 1) // unsafe_dataset.shape[0]
+                        unsafe_repeated = unsafe_dataset.repeat((repeat_times,) + (1,) * (unsafe_dataset.dim() - 1))
+                        indices = torch.randperm(unsafe_repeated.shape[0], device=unsafe_dataset.device)[:N]
+                        neg_data = unsafe_repeated[indices]
+                    else:
+                        neg_data = unsafe_dataset
+                    
+                    # Gradient penalty computation
+                    alpha = torch.rand(pos_data.shape[0], 1, device=pos_data.device)
+                    interpolates = alpha * pos_data + (1 - alpha) * neg_data
+                    interpolates.requires_grad_(True)
+                    disc_interpolates = wm.heads["margin_gp"](interpolates)
+
+                    gradients = torch.autograd.grad(
+                        outputs=disc_interpolates,
+                        inputs=interpolates,
+                        grad_outputs=torch.ones_like(disc_interpolates),
+                        create_graph=training,  # Only create graph when training
+                        retain_graph=training,  # Only retain graph when training
+                        only_inputs=True,
+                    )[0]
+                    gradients = gradients.view(pos_data.shape[0], -1)
+                    gradients_norm = torch.sqrt(torch.sum(gradients**2, dim=1) + 1e-12)
+                    gp_loss = ((gradients_norm - self._config.gradient_thresh) ** 2).mean()
+
+                pos_mean = pos.mean() if pos.numel() > 0 else 0.0
+                neg_mean = neg.mean() if neg.numel() > 0 else 0.0
+                zero_sum_loss = neg_mean - pos_mean
+                
+                # old
+                #relu_loss = torch.relu(self._config.gamma_lx + neg_mean) + torch.relu(self._config.gamma_lx - pos_mean)
+                # new
+                #relu_loss = torch.relu(self._config.gamma_lx + neg).mean() + torch.relu(self._config.gamma_lx - pos).mean()
+                # punish neg for being positive, and pos for being negative
+                neg_relu = torch.relu(neg).mean() if neg.numel() > 0 else 0.0
+                pos_relu = torch.relu(-pos).mean() if pos.numel() > 0 else 0.0
+                relu_loss = neg_relu + pos_relu
+
+
+                loss = self._config.zs_weight * zero_sum_loss 
+                loss += self._config.relu_weight * relu_loss 
+                loss += self._config.gp_weight * gp_loss
+                
+                # Only optimize if training
+                if training:
+                    metrics.update(self.margin_gp_opt(loss, wm.heads["margin_gp"].parameters()))
+                
+                metrics["margin_gp"] = to_np(loss)
+                metrics["sign_loss"] = to_np(relu_loss)
+                metrics["zs_loss"] = to_np(zero_sum_loss)
+                metrics["gp_loss"] = to_np(gp_loss)
+                if not training:
+                    metrics["pos_mean"] = to_np(pos_mean)
+                    metrics["neg_mean"] = to_np(neg_mean)
+        
+        return metrics
+
+    def _margin_nogp_step(self, safe_dataset, unsafe_dataset, training=True):
+        """Unified margin no-GP training/evaluation"""
+        metrics = {}
+        wm = self._wm
+        
+        # Choose context manager based on training mode
+        grad_context = tools.RequiresGrad(wm.heads["margin_nogp"]) if training else torch.no_grad()
+        
+        with grad_context:
+            with torch.amp.autocast("cuda", enabled=wm._use_amp):
+                pos = wm.heads["margin_nogp"](safe_dataset)
+                neg = wm.heads["margin_nogp"](unsafe_dataset)
+                gamma = self._config.gamma_lx
+                lx_loss = 0.0
+                
+                if pos.numel() > 0:
+                    #lx_loss += torch.relu(self._config.gamma_lx - pos.mean()).mean()
+                    lx_loss += torch.relu(self._config.gamma_lx - pos).mean()
+                if neg.numel() > 0:
+                    #lx_loss += torch.relu(self._config.gamma_lx + neg.mean())
+                    lx_loss += torch.relu(self._config.gamma_lx + neg).mean()
+                
+                # Only optimize if training
+                if training:
+                    metrics.update(self.margin_nogp_opt(lx_loss, wm.heads["margin_nogp"].parameters()))
+                
+                metrics["margin_nogp"] = lx_loss.item()
+                if not training:
+                    metrics["pos_mean_nogp"] = to_np(pos.mean()) if pos.numel() > 0 else 0.0
+                    metrics["neg_mean_nogp"] = to_np(neg.mean()) if neg.numel() > 0 else 0.0
+        
+        return metrics
+
+    # Convenience methods
+    def train_rssm(self, data, step=None):
+        """Training wrapper"""
+        return self.rssm_step(data, step, training=True)
+
+    def eval_rssm(self, data, step=None):
+        """Evaluation wrapper"""
+        return self.rssm_step(data, step, training=False)
+        
 def count_steps(folder):
     return sum(int(str(n).split("-")[-1][:-4]) - 1 for n in folder.glob("*.npz"))
 
@@ -237,8 +397,10 @@ def main(config):
     logdir.mkdir(parents=True, exist_ok=True)
     # step in logger is environmental step
     step = 0
-    logger = tools.Logger(logdir, config.action_repeat * step)
-    #logger = tools.DebugLogger(logdir, config.action_repeat * step)
+    if config.debug:
+        logger = tools.DebugLogger(logdir, config.action_repeat * step)
+    else:
+        logger = tools.Logger(logdir, config.action_repeat * step)
 
     print("Create envs.")
     
@@ -275,13 +437,12 @@ def main(config):
 
     
     expert_eps = collections.OrderedDict()
-    print(expert_eps)
-    tools.fill_offline_dataset(config, expert_eps)
-    expert_dataset = make_dataset(expert_eps, config)
-    # validation replay buffer
     expert_val_eps = collections.OrderedDict()
-    tools.fill_offline_dataset(config, expert_val_eps, is_val_set=True)
-    eval_dataset = make_dataset(expert_eps, config)
+
+    print(expert_eps)
+    tools.fill_offline_dataset(config, expert_eps, expert_val_eps)
+    expert_dataset = make_dataset(expert_eps, config)
+    eval_dataset = make_dataset(expert_val_eps, config)
 
     print("Length of training data:", len(expert_eps))
     print("Length of validation data:", len(expert_val_eps))
@@ -320,7 +481,7 @@ def main(config):
 
         agent.train()
     # ==================== Pretrain ====================
-    total_train_steps = config.rssm_train_steps 
+    total_train_steps = config.steps 
     print(total_train_steps)
     if total_train_steps > 0:
         
@@ -341,6 +502,18 @@ def main(config):
                 ((step + 1) % config.eval_every) == 0
                 or step == 1
             ):
+                # Add evaluation metrics logging
+                agent.eval()
+                eval_data = next(eval_dataset)
+                eval_metrics = agent.eval_rssm(eval_data, step)
+                
+                # Log evaluation metrics
+                for key, value in eval_metrics.items():
+                    logger.scalar(f"eval/{key}", float(np.mean(value)))
+                
+                # Reset to training mode
+                agent.train()
+                
                 evaluate(
                     other_dataset=expert_dataset, eval_prefix="pretrain"
                 )                
@@ -348,7 +521,6 @@ def main(config):
                     ckpt_name, step, 0, best_pretrain_success, agent, logdir
                 )
 
-    
             exp_data = next(expert_dataset)
             agent.train_rssm(exp_data, step)
     
