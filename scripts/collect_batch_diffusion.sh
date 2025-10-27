@@ -66,3 +66,4 @@ else
     echo "🎉 All checkpoints completed successfully!"
     exit 0
 fi
+

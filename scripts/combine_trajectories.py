@@ -187,9 +187,9 @@ if __name__ == "__main__":
     try:
         combine_trajectory_files()
         verify_combined_file()
-        print("\n✅ Successfully combined all trajectory files!")
+        print("\n Successfully combined all trajectory files!")
         
     except Exception as e:
-        print(f"\n❌ Error during combination: {e}")
+        print(f"\n Error during combination: {e}")
         import traceback
         traceback.print_exc()

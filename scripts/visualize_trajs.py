@@ -9,22 +9,18 @@ Loads trajectories from HDF5 files and creates various visualizations:
 - State evolution over time
 """
 
-import sys
-import os
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.animation import FuncAnimation, PillowWriter
 import seaborn as sns
 import h5py
+import os
 import argparse
 from typing import List, Dict, Any, Tuple, Optional
 import cv2
 
-# Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from scripts.collect_trajs import load_trajectories_from_hdf5
+from collect_trajs import load_trajectories_from_hdf5
 
 
 class TrajectoryVisualizer:
@@ -557,7 +553,7 @@ def visualize_from_file(filepath: str, output_dir: str = "visualizations"):
 def main():
     """Main function for command-line usage."""
     parser = argparse.ArgumentParser(description='Visualize trajectories from HDF5 files')
-    parser.add_argument('--filepath', type=str, default='/data/dubins/trajs/dubins_gap.h5', help='Path to HDF5 trajectory file')
+    parser.add_argument('--filepath', type=str, default='/data/dubins/dubins_gap.h5', help='Path to HDF5 trajectory file')
     parser.add_argument('--output_dir', type=str, default='visualizations', 
                        help='Output directory for visualizations')
     parser.add_argument('--show_interactive', action='store_true', 

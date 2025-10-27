@@ -118,14 +118,14 @@ class DreamerConfig:
     hybrid: bool = True
 
 
-    no_gp: bool = False
+    no_gp: bool = True
     rssm_ckpt_path: str = "/data/dubins/test/dreamer/rssm_ckpt.pt"
     filter_directory_gp: str = '/data/dubins/test/dreamer/PyHJ/gp/epoch_id_15/policy.pth'
     filter_directory_nogp: str = '/data/dubins/test/dreamer/PyHJ/nogp/epoch_id_15/policy.pth'
     num_runs: int = 1
     cbf_gamma: float = 0.9
     lr_thresh: float = 0.3
-    filter_mode: str = 'cbf' # 'cbf' or 'lr' or 'none'
+    filter_mode: str = 'none' # 'cbf' or 'lr' or 'none'
 
     task: str = 'dubins-wm'
     '''# Dreamer config
