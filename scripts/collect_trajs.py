@@ -5,43 +5,58 @@ Collects N trajectories from the Dubins car environment using various controller
 and saves them to HDF5 files for analysis, visualization, or training purposes.
 """
 
+import sys
+import os
 import numpy as np
 import h5py
-import os
+import torch
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
 import argparse
 
-# Import our modules
-from configs import (Config, get_default_config, get_mpc_config, get_no_obstacles_config, 
-                get_debug_config, get_mppi_config, get_diffusion_config)
-from run_experiment import create_env_from_config, create_controller_from_config
-from dubins_env import DubinsEnv
+# Add parent directory to path for imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Import our modules
+from configs import (Config, get_default_config, get_mpc_config, get_random_config, get_no_obstacles_config, 
+                get_debug_config, get_mppi_config, get_diffusion_config, get_diffusion_wm_config)
+from configs.dreamer_conf import DreamerConfig
+from scripts.run_experiment import create_env_from_config, create_controller_from_config
+from dubins_env import DubinsEnv
+from controllers.wm_predictor import WMPredictor
+from controllers import FilteredDiffusionController
 
 class TrajectoryCollector:
     """
     Collects trajectories from the Dubins car environment.
     """
     
-    def __init__(self, config: Config, output_dir: str = "data"):
+    def __init__(self, config: Config, output_dir: str = "data", wm_config: DreamerConfig = None):
         """
         Initialize trajectory collector.
         
         Args:
             config: Configuration for environment and controller
             output_dir: Directory to save trajectory files
+            wm_config: DreamerConfig for world model prediction (optional)
         """
         self.config = config
         self.output_dir = output_dir
+        self.wm_config = wm_config
         
         # Create output directory if it doesn't exist
         os.makedirs(output_dir, exist_ok=True)
         
         # Initialize environment and controller
         self.env = create_env_from_config(config)
-        self.controller = create_controller_from_config(config)
-        
+        controller = create_controller_from_config(config)
+        # Initialize world model predictor if enabled
+        if wm_config and wm_config.use_wm_prediction:
+            self.controller = FilteredDiffusionController(controller, wm_config)
+            print("FilteredDiffusionController initialized successfully")
+        else:
+            self.controller = controller
+            print("Controller initialized successfully")
         # Trajectory storage
         self.trajectories = []
         self.metadata = {
@@ -87,73 +102,90 @@ class TrajectoryCollector:
         if initial_state is not None:
             reset_options['initial_state'] = initial_state
         
-        obs, info = self.env.reset(seed=seed, options=reset_options if reset_options else None)
-        
-        # Reset controller if it has a reset method (MPC)
-        if hasattr(self.controller, 'reset'):
-            self.controller.reset()
-        
-        # Data storage for this trajectory
-        states = [np.array([info['agent_position'][0], info['agent_position'][1], info['agent_orientation']])]
-        actions = []
-        rewards = []
-        observations = [obs] if save_images else []
-        infos = [info.copy()]
-        
-        # Run episode
-        for step in range(max_steps):
-            # Compute action
-            if self.config.controller.controller_type == "mpc":
-                action = self.controller.compute_action(
-                    info, 
-                    self.config.environment.get_obstacles_list(), 
-                    np.array(self.config.environment.goal_position)
-                )
-            elif self.config.controller.controller_type == "diffusion":
-                # For diffusion controller, pass the current observation
-                action = self.controller.compute_action(
-                    info, 
-                    self.config.environment.get_obstacles_list(),
-                    obs  # Pass the current observation
-                )
-            else:
-                action = self.controller.compute_action(info, self.config.environment.get_obstacles_list())
+        long_traj = False
+
+        while not long_traj: 
+            obs, info = self.env.reset( options=reset_options if reset_options else None)
+
+            # Reset controller if it has a reset method (MPC)
+            if hasattr(self.controller, 'reset'):
+                self.controller.reset()
             
-            # Store action
-            actions.append(float(action))
+            # Data storage for this trajectory
+            states = [np.array([info['agent_position'][0], info['agent_position'][1], info['agent_orientation']])]
+            actions = []
+            rewards = []
+            collisions = []
+            observations = [obs] if save_images else []
+            infos = [info.copy()]
             
-            # Step environment
-            obs, reward, terminated, truncated, info = self.env.step(action)
+            # Run episode
+            for step in range(max_steps):
+                # Compute action
+                if self.config.controller.controller_type == "mpc":
+                    action = self.controller.compute_action(
+                        info, 
+                        self.config.environment.get_obstacles_list(), 
+                        np.array(self.config.environment.goal_position)
+                    )
+                elif self.config.controller.controller_type == "mppi":
+                    action = self.controller.compute_action(
+                        info, 
+                        self.config.environment.get_obstacles_list(), 
+                        np.array(self.env.goal_position)
+                    )
+                elif self.config.controller.controller_type == "diffusion":
+                    # For diffusion controller, pass the current observation
+                    print("Computing action for diffusion controller")
+                    action = self.controller.compute_action(
+                        info, 
+                        obs  # Pass the current observation
+                    )
+                else:
+                    action = self.controller.compute_action(info, self.config.environment.get_obstacles_list())
+                
+                # Store action
+                actions.append(float(action))
+                
+                # Step environment
+                obs, reward, terminated, truncated, info = self.env.step(action)
+                
+                # Store data
+                states.append(np.array([info['agent_position'][0], info['agent_position'][1], info['agent_orientation']]))
+                rewards.append(float(reward))
+                infos.append(info.copy())
+                collisions.append(info.get('collision', False))
+                
+                if save_images:
+                    observations.append(obs)
+                
+                # Check termination
+                if terminated or truncated:
+                    break
+                #exit()
             
-            # Store data
-            states.append(np.array([info['agent_position'][0], info['agent_position'][1], info['agent_orientation']]))
-            rewards.append(float(reward))
-            infos.append(info.copy())
+            # Compile trajectory data
+            trajectory_data = {
+                'episode_idx': episode_idx,
+                'seed': seed,
+                'initial_state': states[0],
+                'states': np.array(states),  # Shape: (T+1, 3) where T is number of steps
+                'actions': np.array(actions),  # Shape: (T,)
+                'rewards': np.array(rewards),  # Shape: (T,)
+                'observations': np.array(observations) if save_images else None,  # Shape: (T+1, H, W, 3) or None
+                'success': infos[-1].get('goal_reached', False),
+                'collision': np.array(collisions),
+                'steps': len(actions),
+                'total_reward': np.sum(rewards),
+                'final_distance_to_goal': infos[-1]['goal_distance'],
+                'infos': infos
+            }
             
-            if save_images:
-                observations.append(obs)
+           
             
-            # Check termination
-            if terminated or truncated:
-                break
-        
-        # Compile trajectory data
-        trajectory_data = {
-            'episode_idx': episode_idx,
-            'seed': seed,
-            'initial_state': states[0],
-            'states': np.array(states),  # Shape: (T+1, 3) where T is number of steps
-            'actions': np.array(actions),  # Shape: (T,)
-            'rewards': np.array(rewards),  # Shape: (T,)
-            'observations': np.array(observations) if save_images else None,  # Shape: (T+1, H, W, 3) or None
-            'success': infos[-1].get('goal_reached', False),
-            'collision': any(info.get('collision', False) for info in infos),
-            'steps': len(actions),
-            'total_reward': np.sum(rewards),
-            'final_distance_to_goal': infos[-1]['goal_distance'],
-            'infos': infos
-        }
-        
+            if trajectory_data['rewards'].shape[0] > 20:
+                long_traj = True
+                
         return trajectory_data
     
     def collect_trajectories(self, 
@@ -212,7 +244,7 @@ class TrajectoryCollector:
         
         if verbose:
             success_rate = np.mean([t['success'] for t in trajectories])
-            collision_rate = np.mean([t['collision'] for t in trajectories])
+            collision_rate = np.mean([t['collision'].any() for t in trajectories])
             avg_steps = np.mean([t['steps'] for t in trajectories])
             avg_reward = np.mean([t['total_reward'] for t in trajectories])
             
@@ -282,7 +314,7 @@ class TrajectoryCollector:
             # Aggregate statistics
             stats_group = f.create_group('statistics')
             success_rate = np.mean([t['success'] for t in trajectories])
-            collision_rate = np.mean([t['collision'] for t in trajectories])
+            collision_rate = np.mean([t['collision'].any() for t in trajectories])
             avg_steps = np.mean([t['steps'] for t in trajectories])
             avg_reward = np.mean([t['total_reward'] for t in trajectories])
             
@@ -313,6 +345,14 @@ class TrajectoryCollector:
                 traj_subgroup.create_dataset('rewards', data=traj['rewards'],
                                            compression=compression, compression_opts=compression_opts)
                 
+                traj_subgroup.create_dataset('failures', data=traj['collision'],
+                                           compression=compression, compression_opts=compression_opts)
+                if 'margin_gp' in traj.keys():
+                    traj_subgroup.create_dataset('margin_gp', data=traj['margin_gp'],
+                                            compression=compression, compression_opts=compression_opts)
+                if 'margin_nogp' in traj.keys():
+                    traj_subgroup.create_dataset('margin_nogp', data=traj['margin_nogp'],
+                                               compression=compression, compression_opts=compression_opts)
                 # Images (if available)
                 if traj['observations'] is not None:
                     traj_subgroup.create_dataset('observations', data=traj['observations'],
@@ -412,18 +452,23 @@ def main():
     """Main function for command-line usage."""
     parser = argparse.ArgumentParser(description='Collect trajectories from Dubins car environment')
     parser.add_argument('--n_trajectories', type=int, default=10, help='Number of trajectories to collect')
-    parser.add_argument('--controller', type=str, default='mppi', choices=['simple', 'mpc', 'mppi', 'diffusion'], 
+    parser.add_argument('--controller', type=str, default='mppi', choices=['simple', 'mpc', 'random', 'mppi', 'diffusion'], 
                        help='Controller type to use')
     parser.add_argument('--config', type=str, default='mppi', 
-                       choices=['default', 'mpc', 'mppi',
-                               'diffusion', 'no_obstacles', 'narrow_gap', 'debug'],
+                       choices=['default', 'mpc', 'random','mppi',
+                               'diffusion', 'diffusion_wm', 'no_obstacles', 'narrow_gap', 'debug'],
                        help='Configuration preset to use')
-    parser.add_argument('--output_dir', type=str, default='/data/dubins', help='Output directory')
+    parser.add_argument('--output_dir', type=str, default='/data/dubins/trajs', help='Output directory')
     parser.add_argument('--filename', type=str, default='trajectories', help='Output filename (without extension)')
     parser.add_argument('--save_images', action='store_true', help='Save image observations')
     parser.add_argument('--compress', action='store_true', default=True, help='Use HDF5 compression')
     parser.add_argument('--verbose', action='store_true', default=True, help='Print progress')
     parser.add_argument('--checkpoint', type=int, default=1000, help='Checkpoint version')
+    parser.add_argument('--use_wm_prediction', action='store_true', help='Enable world model prediction')
+    parser.add_argument('--wm_checkpoint', type=str, default='/data/dubins/test/dreamer/rssm_ckpt.pt', 
+                       help='Path to world model checkpoint')
+    parser.add_argument('--wm_history_length', type=int, default=8, 
+                       help='Number of timesteps of history to use for WM prediction')
     
     args = parser.parse_args()
     
@@ -431,8 +476,10 @@ def main():
     config_map = {
         'default': get_default_config,
         'mpc': get_mpc_config,
+        'random': get_random_config,
         'mppi': get_mppi_config,
         'diffusion': get_diffusion_config,
+        'diffusion_wm': get_diffusion_wm_config,
         'no_obstacles': get_no_obstacles_config,
         'debug': get_debug_config
     }
@@ -443,8 +490,24 @@ def main():
         config = config_map[args.config]()
     config.controller.controller_type = args.controller
     
+    # Create WM config if enabled
+    wm_config = None
+    if args.use_wm_prediction:
+        wm_config = DreamerConfig()
+        wm_config.use_wm_prediction = True
+        wm_config.wm_checkpoint_path = args.wm_checkpoint
+        # Set other required config values
+        wm_config.turnRate = config.environment.max_angular_velocity
+        wm_config.x_min = config.environment.world_bounds[0]
+        wm_config.x_max = config.environment.world_bounds[1]
+        wm_config.y_min = config.environment.world_bounds[2]
+        wm_config.y_max = config.environment.world_bounds[3]
+        wm_config.size = [128, 128]  # Image size
+        # Set history length from command line argument
+        wm_config.wm_history_length = args.wm_history_length
+    
     # Create collector and collect trajectories
-    collector = TrajectoryCollector(config, args.output_dir)
+    collector = TrajectoryCollector(config, args.output_dir, wm_config)
     
     try:
         trajectories = collector.collect_trajectories(
@@ -463,32 +526,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # Example usage
-    if len(os.sys.argv) == 1:
-        # Default example run
-        print("Running example trajectory collection...")
-        
-        # Collect MPC trajectories
-        config = get_mpc_config()
-        collector = TrajectoryCollector(config, "/data")
-        
-        try:
-            trajectories = collector.collect_trajectories(
-                n_trajectories=50,
-                save_images=False,
-                verbose=True
-            )
-            
-            filepath = collector.save_to_hdf5(trajectories, "mpc_trajectories")
-            
-            # Test loading
-            print("\nTesting data loading...")
-            loaded_trajectories, metadata = load_trajectories_from_hdf5(filepath)
-            print(f"Successfully loaded {len(loaded_trajectories)} trajectories")
-            print(f"Success rate: {metadata['statistics']['success_rate']:.1%}")
-            
-        finally:
-            collector.close()
-    else:
-        # Command-line usage
-        main()
+    main()
