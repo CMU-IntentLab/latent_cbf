@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dreamerv3-torch"
+version = "0.1.0"
+description = "PyTorch implementation of DreamerV3 world models"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+  "numpy",
+  "torch>=2.4,<2.6",
+  "tensorboard>=2.5",
+  "termcolor",
+  "tqdm",
+  "wandb",
+  "h5py",
+]
+
+[project.urls]
+Homepage = "https://github.com/NM512/dreamerv3-torch"
+
+[tool.setuptools]
+packages = ["dreamerv3_torch"]
+
+[tool.setuptools.package-dir]
+dreamerv3_torch = "."
