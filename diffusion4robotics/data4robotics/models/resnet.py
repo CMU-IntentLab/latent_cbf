@@ -9,7 +9,6 @@ import numpy as np
 import torch.nn as nn
 #from r3m import load_r3m
 from torchvision import models
-from data4robotics.models.base import BaseModel
 
 
 def _make_norm(norm_cfg):
@@ -38,35 +37,11 @@ def _construct_resnet(size, norm, weights=None):
     
     if weights is not None:
         w = w.verify(weights).get_state_dict(progress=True)
-        old_keys = list(w.keys())
         if norm is not nn.BatchNorm2d:
             w = {k:v for k, v in w.items() if 'running_mean' not in k \
                                            and 'running_var' not in k}
         m.load_state_dict(w)
     return m
-
-
-class ResNet(BaseModel):
-    def __init__(self, size, norm_cfg, weights=None, restore_path=''):
-        norm_layer = _make_norm(norm_cfg)
-        model = _construct_resnet(size, norm_layer, weights)
-        model.fc = nn.Identity()
-        super().__init__(model, restore_path)
-        self._size = size
-
-    def forward(self, x):
-        return self._model(x)
-
-    @property
-    def embed_dim(self):
-        return {18: 512, 34: 512, 50: 2048}[self._size]
-
-
-#class R3M(ResNet):
-#    def __init__(self, size):
-#        nn.Module.__init__(self)
-#        self._model = load_r3m(f'resnet{size}').module.convnet.cpu()
-#        self._size = size
 
 
 class SpatialSoftmax(nn.Module):

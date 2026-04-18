@@ -28,6 +28,7 @@ from .presets import (
     get_mppi_config,
     get_diffusion_config,
     get_diffusion_wm_config,
+    get_diffusion_collection_config,
 )
 
 __all__ = [

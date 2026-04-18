@@ -6,7 +6,7 @@ set -e  # Exit on any error
 
 # Check if we're in the right directory
 if [ ! -f "scripts/collect_trajs.py" ]; then
-    echo "❌ Error: scripts/collect_trajs.py not found!"
+    echo "Error: scripts/collect_trajs.py not found!"
     echo "Please run this script from the latent_cbf directory."
     exit 1
 fi
@@ -36,10 +36,10 @@ for checkpoint in "${checkpoints[@]}"; do
         --save_images \
         --verbose \
         --checkpoint "$checkpoint"; then
-        echo "✅ Checkpoint $checkpoint completed successfully!"
+        echo "Checkpoint $checkpoint completed successfully!"
         successful+=("$checkpoint")
     else
-        echo "❌ Checkpoint $checkpoint failed!"
+        echo "Checkpoint $checkpoint failed!"
         failed+=("$checkpoint")
     fi
 done
@@ -50,12 +50,12 @@ echo "============================================================"
 echo "BATCH COLLECTION SUMMARY"
 echo "============================================================"
 echo "Total checkpoints: ${#checkpoints[@]}"
-echo "✅ Successful (${#successful[@]}): ${successful[*]}"
-echo "❌ Failed (${#failed[@]}): ${failed[*]}"
+echo "Successful (${#successful[@]}): ${successful[*]}"
+echo "Failed (${#failed[@]}): ${failed[*]}"
 
 if [ ${#failed[@]} -gt 0 ]; then
     echo ""
-    echo "⚠️  Some checkpoints failed. You may want to retry them individually."
+    echo "Some checkpoints failed. You may want to retry them individually."
     echo "Failed checkpoint commands:"
     for checkpoint in "${failed[@]}"; do
         echo "python scripts/collect_trajs.py --controller diffusion --config diffusion --n_trajectories 50 --filename diffusion_trajectories_${checkpoint} --output_dir /data/dubins --save_images --verbose --checkpoint ${checkpoint}"
@@ -63,7 +63,7 @@ if [ ${#failed[@]} -gt 0 ]; then
     exit 1
 else
     echo ""
-    echo "🎉 All checkpoints completed successfully!"
+    echo "All checkpoints completed successfully!"
     exit 0
 fi
 

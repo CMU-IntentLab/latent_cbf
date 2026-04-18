@@ -16,9 +16,7 @@ from pathlib import Path
 def get_all_trajectory_files():
     """Get all trajectory files to combine."""
     traj_files = glob.glob('/data/dubins/trajs/*.h5')
-    
-    all_files = traj_files
-    
+        
     # Sort files for consistent ordering
     traj_files_sorted = sorted(traj_files)
     all_files_sorted = traj_files_sorted

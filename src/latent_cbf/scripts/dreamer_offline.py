@@ -524,15 +524,27 @@ def main(config):
     
 
 if __name__ == "__main__":
-    args = DreamerConfig()
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--relu_weight", type=float, default=1.0)
+    parser.add_argument("--gp_weight", type=float, default=10.0)
+    parser.add_argument("--zs_weight", type=float, default=0.1)
+
+    args = parser.parse_args()
+
+    config = DreamerConfig()
+    config.relu_weight = args.relu_weight
+    config.gp_weight = args.gp_weight
+    config.zs_weight = args.zs_weight
+    config.logdir = f"/data/dubins/dreamer/PyHJ/gp/relu_weight_{args.relu_weight}_gp_weight_{args.gp_weight}_zs_weight_{args.zs_weight}"
     env_conf = Config()
 
-    args.turnRate = env_conf.max_angular_velocity
-    args.x_min = env_conf.environment.world_bounds[0]
-    args.x_max = env_conf.environment.world_bounds[1]
-    args.y_min = env_conf.environment.world_bounds[2]
-    args.y_max = env_conf.environment.world_bounds[3]
-    args.size = env_conf.environment.image_size
+    config.turnRate = env_conf.max_angular_velocity
+    config.x_min = env_conf.environment.world_bounds[0]
+    config.x_max = env_conf.environment.world_bounds[1]
+    config.y_min = env_conf.environment.world_bounds[2]
+    config.y_max = env_conf.environment.world_bounds[3]
+    config.size = env_conf.environment.image_size
     
     
-    main(args)
+    main(config)

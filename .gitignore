@@ -32,7 +32,17 @@ MANIFEST
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
-
+*.claude
+*.gif
+*.h5
+*.pkl
+*.pt
+*.pth
+*.pkl.gz
+*.pkl.bz2
+*.pkl.zip
+*.pkl.tar
+*.pkl.tar.gz
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt

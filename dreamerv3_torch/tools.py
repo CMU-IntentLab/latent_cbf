@@ -73,7 +73,7 @@ class Logger:
 
         name = str(logdir).split('/')[-2] + '_' + str(logdir).split('/')[-1]
         # Initialize WandB
-        wandb.init(project="eaishw2", config={"logdir": str(logdir)}, name=name)
+        wandb.init(project="latent_cbf", config={"logdir": str(logdir)}, name=name)
 
     def config(self, config_dict):
         # Convert PosixPath objects to strings

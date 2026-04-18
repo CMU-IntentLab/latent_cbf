@@ -10,6 +10,9 @@ torch>=2.4.0,<2.6.0
 torchvision>=0.19.0
 
 # --- core & diffusion4robotics (pip section of diffusion4robotics/env.yml) ---
+# wandb imports pkg_resources (setuptools); some minimal envs omit it
+ipdb
+setuptools==68.2.2
 cloudpickle==2.0.0
 diffusers==0.25.0
 dm-control==1.0.10
@@ -17,7 +20,7 @@ dm-env==1.6
 dm-tree==0.1.8
 gym==0.23.1
 h5py
-huggingface-hub
+huggingface-hub==0.14.1
 hydra-core==1.2.0
 # 1.2.0 pins ray==1.12.0 (no longer on PyPI); 1.2.1 uses ray[default]<3
 hydra-ray-launcher==1.2.1
@@ -25,8 +28,9 @@ hydra-submitit-launcher==1.2.0
 imageio==2.22.1
 imageio-ffmpeg==0.4.7
 mujoco==2.3.2
-numpy
-opencv-python
+numpy==1.24.4
+# opencv-python>=4.10 (e.g. 4.13) requires numpy>=2; keep below 4.10 for numpy 1.x
+opencv-python>=4.5.0,<4.10.0
 pandas
 plotly
 pytest==7.3.1
@@ -35,7 +39,7 @@ scipy
 timm==0.6.11
 tqdm
 transforms3d
-wandb==0.13.4
+wandb==0.20.1
 
 # --- world model, Dubins env, visualization ---
 gymnasium==0.28.1

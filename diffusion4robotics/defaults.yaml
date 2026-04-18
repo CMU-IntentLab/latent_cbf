@@ -1,0 +1,37 @@
+# Static defaults for dubins + DiffusionUnet + RobomimicResNet BC training.
+# Runtime paths and scale are set via train.py CLI.
+
+# Checkpoints, exp_config.yaml, and agent_config.yaml go under this directory
+checkpoint_dir: /data/dubins/diffusion
+
+dropout: 0.1
+train_diffusion_steps: 100
+eval_diffusion_steps: 16
+n_test_trans: 500
+schedule_freq: 1
+
+noise_net_kwargs:
+  diffusion_step_embed_dim: 256
+  down_dims: [256, 512, 1024]
+  kernel_size: 3
+  n_groups: 8
+
+wandb:
+  project: latent_cbf
+  name: dp
+  debug: false
+
+optim:
+  betas: [0.95, 0.999]
+  weight_decay: 1.0e-6
+  eps: 1.0e-8
+
+schedule:
+  num_warmup_steps: 500
+
+resnet:
+  size: 18
+  weights: IMAGENET1K_V1
+  norm_cfg:
+    name: diffusion_policy
+  img_size: 224

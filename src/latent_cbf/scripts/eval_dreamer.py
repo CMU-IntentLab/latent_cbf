@@ -209,10 +209,6 @@ def main(config):
                     ax2.plot(actions[:n], 'g-', label='actions', linewidth=1)
                     ax2.plot(failures[:n], 'r-', label='failures', linewidth=1)
                     ax2.axhline(y=0, color='black', linestyle='--', alpha=0.5)
-                    ax2.axvline(x=8, color='black', linestyle='--', alpha=0.5)
-                    ax2.axvline(x=16, color='black', linestyle='--', alpha=0.5)
-                    ax2.axvline(x=24, color='black', linestyle='--', alpha=0.5)
-                    ax2.axvline(x=32, color='black', linestyle='--', alpha=0.5)
                     ax2.legend()
                     ax2.set_title('Actions')
                     ax2.set_xlabel('Time Step')
@@ -362,7 +358,14 @@ def main(config):
                 else:
                     print("No images created")
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--filter_mode', type=str, default='none', choices=['none', 'cbf', 'lr'],
+                       help='Filter mode to use for WM prediction')
+    parser.add_argument('--no_gp', action='store_true', default=False, help='Use no GP')
+    cli_args = parser.parse_args()
     args = DreamerConfig()
+    args.filter_mode = cli_args.filter_mode
+    args.no_gp = cli_args.no_gp
     env_conf = Config()
 
     args.turnRate = env_conf.max_angular_velocity

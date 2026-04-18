@@ -19,11 +19,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import our modules
 from configs import (Config, get_default_config, get_mpc_config, get_random_config, get_no_obstacles_config, 
-                get_debug_config, get_mppi_config, get_diffusion_config, get_diffusion_wm_config)
+                get_debug_config, get_mppi_config, get_diffusion_config, get_diffusion_collection_config, get_diffusion_wm_config)
 from configs.dreamer_conf import DreamerConfig
 from scripts.run_experiment import create_env_from_config
 from controllers.factory import create_controller_from_config
-from dubins_env import DubinsEnv
+from dubins.dubins_env import DubinsEnv
 
 class TrajectoryCollector:
     """
@@ -112,6 +112,7 @@ class TrajectoryCollector:
             actions = []
             rewards = []
             collisions = []
+            filter_mag = []
             observations = [obs] if save_images else []
             infos = [info.copy()]
             
@@ -132,11 +133,17 @@ class TrajectoryCollector:
                     )
                 elif self.config.controller.controller_type == "diffusion":
                     # For diffusion controller, pass the current observation
-                    print("Computing action for diffusion controller")
                     action = self.controller.compute_action(
                         info, 
                         obs  # Pass the current observation
                     )
+                    if type(action) == tuple:
+                        raw_action = action[1]
+                        action = action[0]
+                        diff = np.abs(raw_action - action)
+                        filter_mag.append(np.abs(raw_action - action).squeeze())
+
+                    
                 else:
                     action = self.controller.compute_action(info, self.config.environment.get_obstacles_list())
                 
@@ -174,6 +181,7 @@ class TrajectoryCollector:
                 'steps': len(actions),
                 'total_reward': np.sum(rewards),
                 'final_distance_to_goal': infos[-1]['goal_distance'],
+                'filter_mag': np.array(filter_mag),
                 'infos': infos
             }
             
@@ -243,6 +251,21 @@ class TrajectoryCollector:
             collision_rate = np.mean([t['collision'].any() for t in trajectories])
             avg_steps = np.mean([t['steps'] for t in trajectories])
             avg_reward = np.mean([t['total_reward'] for t in trajectories])
+            filter_mag = []
+            num_filtereds = []
+            for t in trajectories:
+                filter_mask = t['filter_mag']>0
+                num_filtered = np.sum(filter_mask)
+                avg_filter_mag = np.mean(t['filter_mag'][filter_mask])
+                if num_filtered > 0:
+                    filter_mag.append(avg_filter_mag)
+                num_filtereds.append(num_filtered)
+            if len(filter_mag) > 0:
+                avg_filter_mag = np.mean(filter_mag)
+                avg_num_filtered = np.mean(num_filtereds)
+            else:
+                avg_filter_mag = 0
+                avg_num_filtered = 0
             
             print("-" * 50)
             print(f"Collection complete!")
@@ -250,6 +273,8 @@ class TrajectoryCollector:
             print(f"Collision rate: {collision_rate:.1%}")
             print(f"Average steps: {avg_steps:.1f}")
             print(f"Average reward: {avg_reward:.2f}")
+            print(f"Average number of filtered actions: {avg_num_filtered:.1f}")
+            print(f"Average filter magnitude: {avg_filter_mag:.2f}")
         
         return trajectories
     
@@ -452,10 +477,15 @@ def main():
                        help='Controller type to use')
     parser.add_argument('--config', type=str, default='mppi', 
                        choices=['default', 'mpc', 'random','mppi',
-                               'diffusion', 'diffusion_wm', 'no_obstacles', 'narrow_gap', 'debug'],
+                               'diffusion', 'diffusion_wm', 'no_obstacles', 'narrow_gap', 'debug', 'diffusion_collection'],
                        help='Configuration preset to use')
     parser.add_argument('--output_dir', type=str, default='/data/dubins/trajs', help='Output directory')
-    parser.add_argument('--filename', type=str, default='trajectories', help='Output filename (without extension)')
+    parser.add_argument(
+        '--filename',
+        type=str,
+        default=None,
+        help='Output filename (without extension). Omit for auto when using diffusion+WM: wm_test, wm_test_lr, wm_test_cbf.',
+    )
     parser.add_argument('--save_images', action='store_true', help='Save image observations')
     parser.add_argument('--compress', action='store_true', default=True, help='Use HDF5 compression')
     parser.add_argument('--verbose', action='store_true', default=True, help='Print progress')
@@ -465,7 +495,8 @@ def main():
                        help='Path to world model checkpoint')
     parser.add_argument('--wm_history_length', type=int, default=8, 
                        help='Number of timesteps of history to use for WM prediction')
-    
+    parser.add_argument('--filter_mode', type=str, default='none', choices=['none', 'cbf', 'lr'],
+                       help='Filter mode to use for WM prediction')
     args = parser.parse_args()
     
     # Select configuration
@@ -475,6 +506,7 @@ def main():
         'random': get_random_config,
         'mppi': get_mppi_config,
         'diffusion': get_diffusion_config,
+        'diffusion_collection': get_diffusion_collection_config,
         'diffusion_wm': get_diffusion_wm_config,
         'no_obstacles': get_no_obstacles_config,
         'debug': get_debug_config
@@ -490,6 +522,7 @@ def main():
     wm_config = None
     if args.use_wm_prediction:
         wm_config = DreamerConfig()
+        wm_config.filter_mode = args.filter_mode
         wm_config.use_wm_prediction = True
         wm_config.wm_checkpoint_path = args.wm_checkpoint
         # Set other required config values
@@ -501,6 +534,18 @@ def main():
         wm_config.size = [128, 128]  # Image size
         # Set history length from command line argument
         wm_config.wm_history_length = args.wm_history_length
+
+    if args.filename is not None:
+        out_filename = args.filename
+    elif args.controller == 'diffusion' and wm_config is not None:
+        if wm_config.filter_mode == 'lr':
+            out_filename = 'wm_test_lr'
+        elif wm_config.filter_mode == 'cbf':
+            out_filename = 'wm_test_cbf'
+        else:
+            out_filename = 'wm_test'
+    else:
+        out_filename = 'trajectories'
     
     # Create collector and collect trajectories
     collector = TrajectoryCollector(config, args.output_dir, wm_config)
@@ -513,7 +558,7 @@ def main():
         )
         
         # Save to HDF5
-        filepath = collector.save_to_hdf5(trajectories, args.filename, args.compress)
+        filepath = collector.save_to_hdf5(trajectories, out_filename, args.compress)
         
         print(f"\nCollection complete! Saved {len(trajectories)} trajectories to {filepath}")
         
@@ -522,4 +567,5 @@ def main():
 
 
 if __name__ == "__main__":
+
     main()

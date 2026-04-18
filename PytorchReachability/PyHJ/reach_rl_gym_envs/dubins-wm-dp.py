@@ -23,15 +23,8 @@ class Dubins_WM_DP_Env(gym.Env):
             self.set_wm(wm, past_data, config, dp)
 
         self.render_mode = None
-        self.time_step = 0.05
-        self.high = np.array([
-            1.1, 1.1, np.pi,
-        ])
-        self.low = np.array([
-            -1.1, -1.1, -np.pi
-        ])
         self.device = 'cuda:0'
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(1,1,544,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(544,), dtype=np.float32)
         image_size = config.size[0] #128
         img_obs_space = gym.spaces.Box(
                 low=0, high=255, shape=(image_size, image_size, 3), dtype=np.uint8
@@ -52,6 +45,7 @@ class Dubins_WM_DP_Env(gym.Env):
         self.action_space = spaces.Box(low=-1, high=1, shape=(1,), dtype=np.float32) # joint action space
         self.image_size=config.size[0]
         self.turnRate = config.turnRate
+        self.no_gp = config.no_gp
 
     def set_wm(self, wm, past_data, config, dp):
         self.device = config.device
@@ -121,10 +115,15 @@ class Dubins_WM_DP_Env(gym.Env):
         
         feat = self.wm.dynamics.get_feat(state).detach()
         cont = self.wm.heads["cont"](feat)
-        with torch.no_grad():  # Disable gradient calculation
-            outputs = torch.tanh(self.wm.heads["margin_nogp"](feat))
-            g_xList.append(outputs.detach().cpu().numpy())
-        
+
+        if self.no_gp:
+            with torch.no_grad():
+                    outputs = torch.tanh(self.wm.heads["margin_nogp"](feat))
+                    g_xList.append(outputs.detach().cpu().numpy())
+        else:
+            with torch.no_grad():
+                outputs = torch.tanh(self.wm.heads["margin_gp"](feat))
+                g_xList.append(outputs.detach().cpu().numpy())
         safety_margin = np.array(g_xList).squeeze()
 
         return safety_margin, cont.mean.squeeze().detach().cpu().numpy()

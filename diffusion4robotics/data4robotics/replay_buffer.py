@@ -103,23 +103,27 @@ class IterableWrapper(IterableDataset):
 
 
 class RobobufReplayBuffer(ReplayBuffer):
-    def __init__(self, buffer_path, transform=None, n_test_trans=500, mode='train', 
-                 ac_chunk=1, cam_indexes=[0], past_frames=0, ac_dim=7):
+    def __init__(self, buffer_path, transform=None, n_test_trans=500, mode='train',
+                 ac_chunk=1, cam_indexes=[0], past_frames=0, ac_dim=7, artifact_dir=None):
         assert mode in ('train', 'test'), "Mode must be train/test"
         with open(buffer_path, 'rb') as f:
             buf = RB.load_traj_list(pkl.load(f))
         assert len(buf) > n_test_trans, "Not enough transitions!"
 
-        norm_file = os.path.join(os.path.dirname(buffer_path), 'ac_norm.json')
+        dest = artifact_dir if artifact_dir is not None else '.'
+        if dest != '.':
+            os.makedirs(dest, exist_ok=True)
+        buf_dir = os.path.dirname(buffer_path)
+        norm_file = os.path.join(buf_dir, 'ac_norm.json')
         if os.path.exists(norm_file):
-            shutil.copyfile(norm_file, './ac_norm.json')
-        ob_norm_file = os.path.join(os.path.dirname(buffer_path), 'ob_norm.json')
+            shutil.copyfile(norm_file, os.path.join(dest, 'ac_norm.json'))
+        ob_norm_file = os.path.join(buf_dir, 'ob_norm.json')
         if os.path.exists(ob_norm_file):
-            shutil.copyfile(ob_norm_file, './ob_norm.json')
+            shutil.copyfile(ob_norm_file, os.path.join(dest, 'ob_norm.json'))
 
-        obs_yaml_file = os.path.join(os.path.dirname(buffer_path), 'obs_config.yaml')
+        obs_yaml_file = os.path.join(buf_dir, 'obs_config.yaml')
         if os.path.exists(obs_yaml_file):
-            shutil.copyfile(obs_yaml_file, './obs_config.yaml')
+            shutil.copyfile(obs_yaml_file, os.path.join(dest, 'obs_config.yaml'))
 
         # shuffle the list with the fixed seed
         rng = random.Random(BUF_SHUFFLE_RNG)

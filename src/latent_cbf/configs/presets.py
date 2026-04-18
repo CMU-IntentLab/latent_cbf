@@ -83,9 +83,9 @@ def get_diffusion_config(checkpoint_version: int = 1000) -> Config:
     """Get diffusion policy configuration."""
     config = Config()
     config.controller.controller_type = "diffusion"
-    config.controller.config_path = "/data/dubins/test/diffusion_test/dubins_robomimic/"
+    config.controller.config_path = "/data/dubins/diffusion/"
     config.controller.checkpoint_version = checkpoint_version
-    config.controller.checkpoint_path = f"/data/dubins/test/diffusion_test/dubins_robomimic/diffusion_test_latest{checkpoint_version}.ckpt"
+    config.controller.checkpoint_path = f"/data/dubins/diffusion/dubins_diffusion_latest{checkpoint_version}.ckpt"
     config.controller.device = "cuda"
     config.controller.action_chunk_size = 8
     config.controller.total_chunk_size = 16
@@ -96,6 +96,26 @@ def get_diffusion_config(checkpoint_version: int = 1000) -> Config:
         x_range=(-1.5, 1.5),
         y_range=(-1.5, 1.5),
         theta_range=(-np.pi, np.pi) 
+    )
+    return config
+
+def get_diffusion_collection_config(checkpoint_version: int = 1000) -> Config:
+    """Get diffusion policy configuration."""
+    config = Config()
+    config.controller.controller_type = "diffusion"
+    config.controller.config_path = "/data/dubins/diffusion/"
+    config.controller.checkpoint_version = checkpoint_version
+    config.controller.checkpoint_path = f"/data/dubins/diffusion/dubins_diffusion_latest{checkpoint_version}.ckpt"
+    config.controller.device = "cuda"
+    config.controller.action_chunk_size = 8
+    config.controller.total_chunk_size = 16
+    config.controller.eval_diffusion_steps = 16
+    config.controller.max_angular_velocity = 2.0
+    config.experiment.video_filename = f"video/diffusion_trajectory_ckpt{checkpoint_version}.mp4"
+    config.environment.set_reset_bounds(
+        x_range=(-1.5, -1),
+        y_range=(-1., 1.),
+        theta_range=(-np.pi/3, np.pi/3) 
     )
     return config
 
@@ -115,7 +135,7 @@ def get_diffusion_wm_config(checkpoint_version: int = 1000, wm_checkpoint_path: 
     config.environment.set_reset_bounds(
         x_range=(-1.5, -1),
         y_range=(-1., 1.),
-        theta_range=(-np.pi, np.pi) 
+        theta_range=(-np.pi/3, np.pi/3) 
     )
     config.experiment.video_filename = f"video/diffusion_wm_trajectory_ckpt{checkpoint_version}.mp4"
     return config

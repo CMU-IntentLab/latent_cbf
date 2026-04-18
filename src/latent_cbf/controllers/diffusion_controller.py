@@ -38,6 +38,9 @@ from gymnasium import spaces
 from PyHJ.policy import avoid_DDPGPolicy_annealing as DDPGPolicy
 from PyHJ.data import Batch
 from PyHJ.exploration import GaussianNoise
+import yaml
+from data4robotics.models.resnet import RobomimicResNet
+
 
 def rmat_to_quat(rot_mat, degrees=False):
     quat = R.from_matrix(torch.Tensor(rot_mat)).as_quat()
@@ -108,9 +111,12 @@ class DiffusionController:
         # Load configuration files
         agent_yaml_path = Path(config_path, "agent_config.yaml")
         exp_config_path = Path(config_path, "exp_config.yaml")
-        obs_config_path = Path(config_path, "obs_config.yaml")
+        obs_config_path = Path("configs/obs_config.yaml")
         ob_dict_path = Path(config_path, "ob_norm.json")
         ac_dict_path = Path(config_path, "ac_norm.json")
+        defaults_path = Path("/home/kensuke/latent_cbf/diffusion4robotics/defaults.yaml")
+        with open(defaults_path, 'r') as f:
+            defaults = yaml.safe_load(f)
         
         # Load normalization parameters
         with open(ob_dict_path, 'r') as f:
@@ -129,8 +135,28 @@ class DiffusionController:
         obs_config = OmegaConf.load(obs_config_path)
         
         # Load model
-        self.agent = hydra.utils.instantiate(agent_config)
-        
+
+        feat = dict(agent_config["features"])
+        feat.pop("class", None)
+        features = RobomimicResNet(**feat)
+
+        n_cams = len(exp_config["params"]["cam_indexes"])
+        self.agent = DiffusionUnetAgent(
+            features=features,
+            shared_mlp=[],
+            odim=agent_config["odim"],
+            n_cams=n_cams,
+            use_obs=False,
+            ac_dim=agent_config["ac_dim"],
+            ac_chunk=exp_config["params"]["ac_chunk"],
+            train_diffusion_steps=defaults["train_diffusion_steps"],
+            eval_diffusion_steps=self.eval_diffusion_steps,  # or defaults["eval_diffusion_steps"] — must match training
+            imgs_per_cam=exp_config["params"]["img_chunk"],
+            dropout=defaults["dropout"],
+            share_cam_features=False,
+            feat_batch_norm=False,
+            noise_net_kwargs=agent_config["noise_net_kwargs"],
+        )        
         # Determine model name and load checkpoint
         if hasattr(exp_config.params, 'exp_name') and exp_config.params.exp_name is not None:
             model_name = exp_config.params.exp_name
@@ -429,7 +455,7 @@ class FilteredDiffusionController:
             feat = self.wm.dynamics.get_feat(states)
             feat_latest= feat[:,-1].detach().cpu().numpy()
             acs =np.array([[raw_ac]])/self.controller.ac_max
-            print(self.eval_V(feat_latest))
+            #print(self.eval_V(feat_latest))
 
             if self.wm_config.filter_mode == 'cbf':
                 B = 25
@@ -446,18 +472,18 @@ class FilteredDiffusionController:
                 if 0 in valid_idx:
                     safe_ac = sample_acs[0]
                 else:
-                    print('filtering')
+                    #print('filtering')
                     valid_acs = sample_acs[valid_idx]
                     closest_idx = np.argmin(np.abs(valid_acs - acs[0]))
                     safe_ac = valid_acs[closest_idx]
-                    print('filtered ac', safe_ac, 'from', acs[0])
+                    #print('filtered ac', safe_ac, 'from', acs[0])
                 ac = safe_ac * self.controller.ac_max
 
             elif self.wm_config.filter_mode == 'lr':
                 qval = self.eval_Q(feat_latest, acs)
                 if qval < self.wm_config.lr_thresh:
                     safe_ac = self.eval_policy(feat_latest).detach().cpu().numpy().flatten()
-                    print('filtered ac', safe_ac, 'from', acs[0])
+                    #print('filtered ac', safe_ac, 'from', acs[0])
                 else:
                     safe_ac = acs[0]
                 ac = safe_ac * self.controller.ac_max
@@ -466,7 +492,7 @@ class FilteredDiffusionController:
             
         else:
             ac = raw_ac
-        return ac
+        return ac, raw_ac
 
     def reset(self):
         self.observation_history = []

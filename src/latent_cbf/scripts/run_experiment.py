@@ -15,7 +15,7 @@ from configs import (Config, get_default_config, get_no_obstacles_config,
                    get_debug_config, get_mpc_config, get_mppi_config,
                    get_diffusion_config)
 from controllers.factory import create_controller_from_config
-from dubins_env import DubinsEnv
+from dubins.dubins_env import DubinsEnv
 
 
 def create_env_from_config(config: Config) -> DubinsEnv:
