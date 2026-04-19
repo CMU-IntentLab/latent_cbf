@@ -11,9 +11,6 @@ from torch.utils.tensorboard import SummaryWriter
 
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(parent_dir)
-pyhj_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '/PyHJ'))
-sys.path.append(pyhj_dir)
-print(sys.path)
 from dreamerv3_torch import models
 from dreamerv3_torch import tools
 import ruamel.yaml as yaml
@@ -139,7 +136,7 @@ def main(exp_config, config):
     )
 
     if config.no_gp:
-        log_path = os.path.join(config.logdir, 'PyHJ', 'dubins-wm', 'nogp')
+        log_path = os.path.join(config.logdir, 'PyHJ/nogp')
     else:
         log_path = os.path.join(config.logdir+'/PyHJ/gp')
 

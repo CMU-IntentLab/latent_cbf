@@ -22,11 +22,10 @@ from collections import defaultdict
 from omegaconf import DictConfig, OmegaConf, ListConfig  # 👈 important import
 from scipy.spatial.transform import Rotation as R
 
-# Add diffusion4robotics to path
-sys.path.append('/home/kensuke/diffusion4robotics')
 from data4robotics import misc
 from data4robotics.models.diffusion_unet import DiffusionUnetAgent
 from configs import get_diffusion_config
+from configs.paths import DIFFUSION4ROBOTICS_DEFAULTS
 import omegaconf.listconfig
 import pathlib
 sys.path.append(str(pathlib.Path(__file__).parent))
@@ -114,7 +113,7 @@ class DiffusionController:
         obs_config_path = Path("configs/obs_config.yaml")
         ob_dict_path = Path(config_path, "ob_norm.json")
         ac_dict_path = Path(config_path, "ac_norm.json")
-        defaults_path = Path("/home/kensuke/latent_cbf/diffusion4robotics/defaults.yaml")
+        defaults_path = DIFFUSION4ROBOTICS_DEFAULTS
         with open(defaults_path, 'r') as f:
             defaults = yaml.safe_load(f)
         

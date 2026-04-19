@@ -31,5 +31,3 @@ done
 
 echo "All ${#zs_weights[@]}×${#relu_weights[@]} runs finished."
 
-
-scripts/dreamer_offline.py --zs_weight 0.2 --relu_weight 2.0 --gp_weight 20

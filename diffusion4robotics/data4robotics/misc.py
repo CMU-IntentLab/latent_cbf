@@ -67,9 +67,14 @@ def init_job(job_params, wandb_cfg, checkpoint_path, run_dir="."):
     params_log = {k: v for k, v in job_params.items() if k != "defaults"}
     if os.path.exists(exp_path):
         old_config = yaml.safe_load(open(exp_path, "r"))
-        create_wandb_run(wandb_cfg, old_config["params"], run_id=old_config["wandb_id"])
-        assert os.path.exists(checkpoint_path), f"{checkpoint_path} does not exist!"
-        return checkpoint_path
+        if os.path.exists(checkpoint_path):
+            create_wandb_run(wandb_cfg, old_config["params"], run_id=old_config["wandb_id"])
+            return checkpoint_path
+        print(
+            f"Warning: {exp_path} exists but checkpoint is missing:\n  {checkpoint_path}\n"
+            "Removing stale exp_config.yaml and starting a new run."
+        )
+        os.remove(exp_path)
     wandb_id = create_wandb_run(wandb_cfg, params_log, run_id=None)
     save_dict = dict(wandb_id=wandb_id, params=params_log)
     with open(exp_path, "w") as f:

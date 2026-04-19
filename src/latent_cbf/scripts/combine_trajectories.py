@@ -1,21 +1,25 @@
 #!/usr/bin/env python3
 """
 Script to combine all trajectory HDF5 files into a single buffer.h5 file.
-Combines:
-- /data/dubins/trajs/*.h5 files
-Into:
-- /data/dubins/buffers/dreamer_buffer.h5
+Combines ``<DATA_ROOT>/trajs/*.h5`` into ``<DATA_ROOT>/buffers/dreamer_buffer.h5``
+where ``<DATA_ROOT>`` is ``DATA_ROOT`` in ``configs.paths``.
 """
 
-import h5py
-import numpy as np
+import sys
 import os
 import glob
 from pathlib import Path
 
+import h5py
+import numpy as np
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from configs.paths import DREAMER_BUFFER, TRAJS_DIR
+
+
 def get_all_trajectory_files():
     """Get all trajectory files to combine."""
-    traj_files = glob.glob('/data/dubins/trajs/*.h5')
+    traj_files = glob.glob(str(TRAJS_DIR / "*.h5"))
         
     # Sort files for consistent ordering
     traj_files_sorted = sorted(traj_files)
@@ -54,7 +58,7 @@ def combine_trajectory_files():
         print("No files found to combine!")
         return
     
-    output_file = '/data/dubins/buffers/dreamer_buffer.h5'
+    output_file = str(DREAMER_BUFFER)
     
     # Remove existing output file if it exists
     if os.path.exists(output_file):
@@ -142,7 +146,7 @@ def combine_trajectory_files():
 
 def verify_combined_file():
     """Verify the structure and contents of the combined file."""
-    output_file = '/data/dubins/buffers/dreamer_buffer.h5'
+    output_file = str(DREAMER_BUFFER)
     
     if not os.path.exists(output_file):
         print(f"Output file {output_file} does not exist!")

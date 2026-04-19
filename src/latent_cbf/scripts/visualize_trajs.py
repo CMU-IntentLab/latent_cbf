@@ -16,9 +16,13 @@ from matplotlib.animation import FuncAnimation, PillowWriter
 import seaborn as sns
 import h5py
 import os
+import sys
 import argparse
 from typing import List, Dict, Any, Tuple, Optional
 import cv2
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from configs.paths import DATA_ROOT
 
 from collect_trajs import load_trajectories_from_hdf5
 
@@ -553,7 +557,7 @@ def visualize_from_file(filepath: str, output_dir: str = "visualizations"):
 def main():
     """Main function for command-line usage."""
     parser = argparse.ArgumentParser(description='Visualize trajectories from HDF5 files')
-    parser.add_argument('--filepath', type=str, default='/data/dubins/dubins_gap.h5', help='Path to HDF5 trajectory file')
+    parser.add_argument('--filepath', type=str, default=str(DATA_ROOT / 'trajs/dubins_gap.h5'), help='Path to HDF5 trajectory file')
     parser.add_argument('--output_dir', type=str, default='visualizations', 
                        help='Output directory for visualizations')
     parser.add_argument('--show_interactive', action='store_true', 

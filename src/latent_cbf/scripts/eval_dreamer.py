@@ -44,6 +44,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import our modules
 from configs import DreamerConfig, Config
+from configs.paths import TEST_RSSM_CHECKPOINT, TRAJS_DIR
 # import Dreamer from scripts/dreamer_offline.py
 from dreamer_offline import Dreamer
 
@@ -107,7 +108,7 @@ def main(config):
         logger,
         None,
     ).to(config.device)
-    filepath = "/data/dubins/test/dreamer/rssm_ckpt.pt"
+    filepath = str(TEST_RSSM_CHECKPOINT)
     agent.load_state_dict(torch.load(filepath)['agent_state_dict'])
 
 
@@ -173,11 +174,11 @@ def main(config):
         tmp = policy.critic_old(tmp_batch.obs, policy(tmp_batch, model="actor_old").act)
         return tmp.cpu().detach().numpy().flatten()
     if config.filter_mode == 'cbf':
-        traj_filepath = "/data/dubins/trajs/wm_test_cbf.h5"
+        traj_filepath = str(TRAJS_DIR / "wm_test_cbf.h5")
     elif config.filter_mode == 'lr':
-        traj_filepath = "/data/dubins/trajs/wm_test_lr.h5"
+        traj_filepath = str(TRAJS_DIR / "wm_test_lr.h5")
     else:
-        traj_filepath = "/data/dubins/trajs/wm_test.h5"
+        traj_filepath = str(TRAJS_DIR / "wm_test.h5")
     
     chunk = 8
     hist = 5

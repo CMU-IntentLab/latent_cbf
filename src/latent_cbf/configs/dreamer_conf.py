@@ -1,10 +1,14 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+
+from .paths import DREAMER_BUFFER, DREAMER_DIR, FILTER_GP, FILTER_NOGP, RSSM_CHECKPOINT
+
+
 @dataclass
-class DreamerConfig:    
+class DreamerConfig:
     seed: int = 0
     deterministic_run: bool = False
-    logdir: str = '/data/dubins/dreamer'
+    logdir: str = str(DREAMER_DIR)
     steps: int = 40_000
     eval_every: int = 1_000
     eval_episode_num: int = 10
@@ -17,11 +21,11 @@ class DreamerConfig:
     video_pred_log: bool =  True
     action_repeat: int = 1
 
-    dataset_path: str = '/data/dubins/buffers/dreamer_buffer.h5'
+    dataset_path: str = str(DREAMER_BUFFER)
     num_train_trajs: float = 0.8
-    
+
     # World Model Prediction Settings
-    wm_checkpoint_path: str = '/data/dubins/dreamer/rssm_ckpt.pt'
+    wm_checkpoint_path: str = str(RSSM_CHECKPOINT)
     use_wm_prediction: bool = True
     wm_history_length: int = 8  # Number of timesteps of history to use for prediction
 
@@ -118,9 +122,9 @@ class DreamerConfig:
 
 
     no_gp: bool = False
-    rssm_ckpt_path: str = "/data/dubins/dreamer/rssm_ckpt.pt"
-    filter_directory_gp: str = '/data/dubins/dreamer/PyHJ/gp/epoch_id_14/policy.pth'
-    filter_directory_nogp: str = '/data/dubins/dreamer/PyHJ/nogp/epoch_id_14/policy.pth'
+    rssm_ckpt_path: str = str(RSSM_CHECKPOINT)
+    filter_directory_gp: str = str(FILTER_GP)
+    filter_directory_nogp: str = str(FILTER_NOGP)
     num_runs: int = 1
     cbf_gamma: float = 0.9
     lr_thresh: float = 0.3

@@ -1,0 +1,60 @@
+[project]
+name = "latent-cbf"
+version = "0.1.0"
+description = "Latent CBF pipeline (Dreamer world model + diffusion policy + HJ reachability)"
+readme = "README.md"
+requires-python = ">=3.10,<3.11"
+dependencies = [
+    "torch>=2.4.0,<2.6.0",
+    "torchvision>=0.19.0",
+    "ipdb",
+    "setuptools==68.2.2",
+    "cloudpickle==2.0.0",
+    "diffusers==0.25.0",
+    "dm-control==1.0.10",
+    "dm-env==1.6",
+    "dm-tree==0.1.8",
+    "gym==0.23.1",
+    "h5py",
+    # diffusers 0.25 imports ``cached_download``, removed in huggingface_hub 0.26+.
+    "huggingface-hub>=0.19.4,<0.26",
+    "hydra-core==1.2.0",
+    "hydra-ray-launcher==1.2.1",
+    "hydra-submitit-launcher==1.2.0",
+    "imageio==2.22.1",
+    "imageio-ffmpeg==0.4.7",
+    "mujoco==2.3.2",
+    "numpy==1.24.4",
+    "opencv-python>=4.5.0,<4.10.0",
+    "pandas",
+    "plotly",
+    "pytest==7.3.1",
+    "requests",
+    "scipy",
+    "timm==0.6.11",
+    "tqdm",
+    "transforms3d",
+    "wandb==0.20.1",
+    "gymnasium==0.28.1",
+    "matplotlib",
+    "pillow",
+    "ruamel.yaml",
+    "seaborn",
+    "tensorboard>=2.5.0",
+    "termcolor",
+    "clarabel",
+    "ipykernel",
+    "moviepy==1.0.3",
+    "numba>=0.51.0",
+    "packaging",
+    "robobuf",
+    "dreamerv3-torch",
+    "data4robotics",
+    "PyHJ",
+]
+
+[tool.uv.sources]
+dreamerv3-torch = { path = "dreamerv3_torch", editable = true }
+data4robotics = { path = "diffusion4robotics", editable = true }
+PyHJ = { path = "PytorchReachability", editable = true }
+robobuf = { git = "https://github.com/AGI-Labs/robobuf.git" }

@@ -18,9 +18,19 @@ import argparse
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import our modules
-from configs import (Config, get_default_config, get_mpc_config, get_random_config, get_no_obstacles_config, 
-                get_debug_config, get_mppi_config, get_diffusion_config, get_diffusion_collection_config, get_diffusion_wm_config)
+from configs import (
+    Config,
+    get_default_config,
+    get_no_obstacles_config,
+    get_debug_config,
+    get_mppi_config,
+    get_narrow_gap_config,
+    get_diffusion_config,
+    get_diffusion_collection_config,
+    get_diffusion_wm_config,
+)
 from configs.dreamer_conf import DreamerConfig
+from configs.paths import RSSM_CHECKPOINT, TRAJS_DIR
 from scripts.run_experiment import create_env_from_config
 from controllers.factory import create_controller_from_config
 from dubins.dubins_env import DubinsEnv
@@ -103,7 +113,7 @@ class TrajectoryCollector:
         while not long_traj: 
             obs, info = self.env.reset( options=reset_options if reset_options else None)
 
-            # Reset controller if it has a reset method (MPC)
+            # Reset controller if it exposes reset (e.g. MPPI warm-start state)
             if hasattr(self.controller, 'reset'):
                 self.controller.reset()
             
@@ -119,33 +129,22 @@ class TrajectoryCollector:
             # Run episode
             for step in range(max_steps):
                 # Compute action
-                if self.config.controller.controller_type == "mpc":
+                if self.config.controller.controller_type == "mppi":
                     action = self.controller.compute_action(
-                        info, 
-                        self.config.environment.get_obstacles_list(), 
-                        np.array(self.config.environment.goal_position)
+                        info,
+                        self.config.environment.get_obstacles_list(),
+                        np.array(self.env.goal_position),
                     )
-                elif self.config.controller.controller_type == "mppi":
-                    action = self.controller.compute_action(
-                        info, 
-                        self.config.environment.get_obstacles_list(), 
-                        np.array(self.env.goal_position)
-                    )
-                elif self.config.controller.controller_type == "diffusion":
-                    # For diffusion controller, pass the current observation
-                    action = self.controller.compute_action(
-                        info, 
-                        obs  # Pass the current observation
-                    )
+                elif self.config.controller.controller_type in ("diffusion", "diffusion_wm"):
+                    action = self.controller.compute_action(info, obs)
                     if type(action) == tuple:
                         raw_action = action[1]
                         action = action[0]
-                        diff = np.abs(raw_action - action)
                         filter_mag.append(np.abs(raw_action - action).squeeze())
-
-                    
                 else:
-                    action = self.controller.compute_action(info, self.config.environment.get_obstacles_list())
+                    raise ValueError(
+                        f"Unsupported controller_type {self.config.controller.controller_type!r}"
+                    )
                 
                 # Store action
                 actions.append(float(action))
@@ -473,13 +472,30 @@ def main():
     """Main function for command-line usage."""
     parser = argparse.ArgumentParser(description='Collect trajectories from Dubins car environment')
     parser.add_argument('--n_trajectories', type=int, default=10, help='Number of trajectories to collect')
-    parser.add_argument('--controller', type=str, default='mppi', choices=['simple', 'mpc', 'random', 'mppi', 'diffusion'], 
-                       help='Controller type to use')
-    parser.add_argument('--config', type=str, default='mppi', 
-                       choices=['default', 'mpc', 'random','mppi',
-                               'diffusion', 'diffusion_wm', 'no_obstacles', 'narrow_gap', 'debug', 'diffusion_collection'],
-                       help='Configuration preset to use')
-    parser.add_argument('--output_dir', type=str, default='/data/dubins/trajs', help='Output directory')
+    parser.add_argument(
+        '--controller',
+        type=str,
+        default='mppi',
+        choices=['mppi', 'diffusion'],
+        help='Controller type (use diffusion with diffusion / diffusion_wm / diffusion_collection presets)',
+    )
+    parser.add_argument(
+        '--config',
+        type=str,
+        default='mppi',
+        choices=[
+            'default',
+            'mppi',
+            'diffusion',
+            'diffusion_wm',
+            'no_obstacles',
+            'narrow_gap',
+            'debug',
+            'diffusion_collection',
+        ],
+        help='Configuration preset to use',
+    )
+    parser.add_argument('--output_dir', type=str, default=str(TRAJS_DIR), help='Output directory')
     parser.add_argument(
         '--filename',
         type=str,
@@ -491,25 +507,25 @@ def main():
     parser.add_argument('--verbose', action='store_true', default=True, help='Print progress')
     parser.add_argument('--checkpoint', type=int, default=1000, help='Checkpoint version')
     parser.add_argument('--use_wm_prediction', action='store_true', help='Enable world model prediction')
-    parser.add_argument('--wm_checkpoint', type=str, default='/data/dubins/test/dreamer/rssm_ckpt.pt', 
+    parser.add_argument('--wm_checkpoint', type=str, default=str(RSSM_CHECKPOINT),
                        help='Path to world model checkpoint')
     parser.add_argument('--wm_history_length', type=int, default=8, 
                        help='Number of timesteps of history to use for WM prediction')
     parser.add_argument('--filter_mode', type=str, default='none', choices=['none', 'cbf', 'lr'],
                        help='Filter mode to use for WM prediction')
+    parser.add_argument('--no_gp', action='store_true', help='Disable GP filter')
     args = parser.parse_args()
     
     # Select configuration
     config_map = {
         'default': get_default_config,
-        'mpc': get_mpc_config,
-        'random': get_random_config,
         'mppi': get_mppi_config,
+        'narrow_gap': get_narrow_gap_config,
         'diffusion': get_diffusion_config,
         'diffusion_collection': get_diffusion_collection_config,
         'diffusion_wm': get_diffusion_wm_config,
         'no_obstacles': get_no_obstacles_config,
-        'debug': get_debug_config
+        'debug': get_debug_config,
     }
     
     if args.controller == 'diffusion':
@@ -534,7 +550,7 @@ def main():
         wm_config.size = [128, 128]  # Image size
         # Set history length from command line argument
         wm_config.wm_history_length = args.wm_history_length
-
+        wm_config.no_gp = args.no_gp
     if args.filename is not None:
         out_filename = args.filename
     elif args.controller == 'diffusion' and wm_config is not None:

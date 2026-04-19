@@ -7,17 +7,18 @@ from .environment import EnvironmentConfig
 from .controller import ControllerConfig
 from .rendering import RenderingConfig
 from .experiment import ExperimentConfig
-from typing import Dict, Any
+from typing import Any, Dict, Optional
 
 @dataclass
 class Config:
     """Main configuration class that combines all config modules."""
-    
+
     environment: EnvironmentConfig = None
     controller: ControllerConfig = None
     rendering: RenderingConfig = None
     experiment: ExperimentConfig = None
-    
+    wm_config: Optional[Dict[str, Any]] = None
+
     def __post_init__(self):
         """Initialize default configs if not provided."""
         if self.environment is None:

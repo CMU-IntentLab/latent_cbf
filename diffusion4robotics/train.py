@@ -4,7 +4,19 @@
 
 import argparse
 import os
+import sys
 import traceback
+from pathlib import Path
+
+# Repo `src/` so `latent_cbf.configs.paths` matches the rest of the pipeline.
+_SRC_ROOT = Path(__file__).resolve().parent.parent / "src"
+if _SRC_ROOT.is_dir() and str(_SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SRC_ROOT))
+
+from latent_cbf.configs.paths import (  # noqa: E402
+    DIFFUSION4ROBOTICS_DEFAULTS,
+    DIFFUSION_DIR,
+)
 
 import numpy as np
 import torch
@@ -19,8 +31,7 @@ from data4robotics.task import BCTask
 from data4robotics.trainers.bc import BehaviorCloning
 from data4robotics.trainers.utils import optim_builder, schedule_builder
 
-_BASE = os.path.dirname(os.path.abspath(__file__))
-_DEFAULTS_PATH = os.path.join(_BASE, "defaults.yaml")
+_DEFAULTS_PATH = str(DIFFUSION4ROBOTICS_DEFAULTS)
 
 
 def _load_defaults(path=None):
@@ -76,10 +87,12 @@ def _device_id(device_str: str):
 
 
 def _resolve_checkpoint_path(args, defaults):
-    """checkpoint_dir from --checkpoint-dir, else defaults.yaml checkpoint_dir, else cwd."""
+    """checkpoint_dir from --checkpoint-dir, else defaults.yaml, else ``DIFFUSION_DIR`` from ``latent_cbf.configs.paths``."""
     ckpt_dir = args.checkpoint_dir
     if ckpt_dir is None:
-        ckpt_dir = defaults.get("checkpoint_dir", ".")
+        ckpt_dir = defaults.get("checkpoint_dir")
+    if ckpt_dir is None:
+        ckpt_dir = str(DIFFUSION_DIR)
     ckpt_dir = os.path.expanduser(ckpt_dir)
     os.makedirs(ckpt_dir, exist_ok=True)
     if args.checkpoint_path:

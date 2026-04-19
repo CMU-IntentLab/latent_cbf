@@ -1,30 +1,30 @@
 """
-Preset configurations for common use cases
+Preset configurations for MPPI and diffusion pipelines.
 """
 
+from __future__ import annotations
+
 import numpy as np
+
 from .base import Config
-from .environment import EnvironmentConfig, ObstacleConfig
-from .controller import ControllerConfig
-from .rendering import RenderingConfig
-from .experiment import ExperimentConfig
+from .environment import ObstacleConfig
+from .paths import DIFFUSION_DIR, RSSM_CHECKPOINT
 
 
 def get_default_config() -> Config:
-    """Get default configuration."""
+    """Default: Dubins task with MPPI (same defaults as :class:`ControllerConfig`)."""
     return Config()
 
 
 def get_no_obstacles_config() -> Config:
-    """Get configuration with no obstacles."""
+    """Same as default but with no obstacles."""
     config = Config()
     config.environment.obstacles = []
     return config
 
 
-
 def get_debug_config() -> Config:
-    """Get configuration optimized for debugging."""
+    """Short runs with deterministic start and rich logging."""
     config = Config()
     config.environment.set_deterministic_reset(-1.2, 0.0, 0.0)
     config.experiment.verbose = True
@@ -34,29 +34,18 @@ def get_debug_config() -> Config:
     return config
 
 
-def get_mpc_config() -> Config:
-    """Get configuration using MPC controller."""
-    config = Config()
-    config.controller.controller_type = "mpc"
-    config.experiment.video_filename = "video/mpc_trajectory.mp4"
+def get_narrow_gap_config() -> Config:
+    """MPPI with slightly tighter obstacles (narrower passage) for stress tests."""
+    config = get_mppi_config()
+    config.environment.obstacles = [
+        ObstacleConfig(x=0.25, y=0.5, radius=0.35),
+        ObstacleConfig(x=0.25, y=-0.5, radius=0.35),
+    ]
     return config
 
-def get_random_config() -> Config:
-    """Get random controller configuration for data collection."""
-    config = get_default_config()
-    config.controller.controller_type = "random"
-    config.controller.seed = 0  # Set seed for reproducible random behavior
-    # You might want different environment settings for random data collection
-    config.environment.set_reset_bounds(
-        x_range=(-1.5, 1.5),
-        y_range=(-1.5, 1.5),
-        theta_range=(-np.pi, np.pi)
-    )
-    
-    return config
 
 def get_mppi_config() -> Config:
-    """Get configuration using MPPI controller."""
+    """MPPI with sampling and cost weights tuned for Dubins gap navigation."""
     config = Config()
     config.controller.controller_type = "mppi"
     config.controller.prediction_horizon = 8
@@ -72,70 +61,66 @@ def get_mppi_config() -> Config:
     config.controller.adaptive_temperature = True
     config.experiment.video_filename = "video/mppi_trajectory.mp4"
     config.environment.set_reset_bounds(
-        x_range=(-1.5, -1  ),
-        y_range=(-1., 1.),
-        theta_range=(-np.pi/3, np.pi/3) 
+        x_range=(-1.5, -1.0),
+        y_range=(-1.0, 1.0),
+        theta_range=(-np.pi / 3, np.pi / 3),
     )
     return config
+
+
+def _apply_diffusion_controller(config: Config, checkpoint_version: int) -> None:
+    ctrl = config.controller
+    ctrl.controller_type = "diffusion"
+    ctrl.config_path = f"{DIFFUSION_DIR}/"
+    ctrl.checkpoint_version = checkpoint_version
+    ctrl.checkpoint_path = f"{DIFFUSION_DIR}/dubins_diffusion_latest{checkpoint_version}.ckpt"
+    ctrl.device = "cuda"
+    ctrl.action_chunk_size = 8
+    ctrl.total_chunk_size = 16
+    ctrl.eval_diffusion_steps = 16
+    config.environment.max_angular_velocity = 2.0
+    config.experiment.video_filename = f"video/diffusion_trajectory_ckpt{checkpoint_version}.mp4"
 
 
 def get_diffusion_config(checkpoint_version: int = 1000) -> Config:
-    """Get diffusion policy configuration."""
+    """Diffusion BC policy with full-box random resets."""
     config = Config()
-    config.controller.controller_type = "diffusion"
-    config.controller.config_path = "/data/dubins/diffusion/"
-    config.controller.checkpoint_version = checkpoint_version
-    config.controller.checkpoint_path = f"/data/dubins/diffusion/dubins_diffusion_latest{checkpoint_version}.ckpt"
-    config.controller.device = "cuda"
-    config.controller.action_chunk_size = 8
-    config.controller.total_chunk_size = 16
-    config.controller.eval_diffusion_steps = 16
-    config.controller.max_angular_velocity = 2.0
-    config.experiment.video_filename = f"video/diffusion_trajectory_ckpt{checkpoint_version}.mp4"
+    _apply_diffusion_controller(config, checkpoint_version)
     config.environment.set_reset_bounds(
         x_range=(-1.5, 1.5),
         y_range=(-1.5, 1.5),
-        theta_range=(-np.pi, np.pi) 
+        theta_range=(-np.pi, np.pi),
     )
     return config
+
 
 def get_diffusion_collection_config(checkpoint_version: int = 1000) -> Config:
-    """Get diffusion policy configuration."""
+    """Diffusion rollouts with the initial region data collection."""
     config = Config()
-    config.controller.controller_type = "diffusion"
-    config.controller.config_path = "/data/dubins/diffusion/"
-    config.controller.checkpoint_version = checkpoint_version
-    config.controller.checkpoint_path = f"/data/dubins/diffusion/dubins_diffusion_latest{checkpoint_version}.ckpt"
-    config.controller.device = "cuda"
-    config.controller.action_chunk_size = 8
-    config.controller.total_chunk_size = 16
-    config.controller.eval_diffusion_steps = 16
-    config.controller.max_angular_velocity = 2.0
-    config.experiment.video_filename = f"video/diffusion_trajectory_ckpt{checkpoint_version}.mp4"
+    _apply_diffusion_controller(config, checkpoint_version)
     config.environment.set_reset_bounds(
-        x_range=(-1.5, -1),
-        y_range=(-1., 1.),
-        theta_range=(-np.pi/3, np.pi/3) 
+        x_range=(-1.5, -1.0),
+        y_range=(-1.0, 1.0),
+        theta_range=(-np.pi / 3, np.pi / 3),
     )
     return config
 
 
-def get_diffusion_wm_config(checkpoint_version: int = 1000, wm_checkpoint_path: str = '/data/dubins/test/dreamer/rssm_ckpt.pt') -> Config:
-    """Get diffusion policy configuration with world model prediction enabled."""
+def get_diffusion_wm_config(
+    checkpoint_version: int = 1000, wm_checkpoint_path: str = str(RSSM_CHECKPOINT)
+) -> Config:
+    """Diffusion + WM filter: same as collection resets, enables WM fields on config."""
     config = get_diffusion_config(checkpoint_version)
     config.controller.controller_type = "diffusion_wm"
-
-    # Enable world model prediction
     config.wm_config = {
-        'use_wm_prediction': True,
-        'wm_checkpoint_path': wm_checkpoint_path,
-        'wm_history_length': 8
+        "use_wm_prediction": True,
+        "wm_checkpoint_path": wm_checkpoint_path,
+        "wm_history_length": 8,
     }
-    
     config.environment.set_reset_bounds(
-        x_range=(-1.5, -1),
-        y_range=(-1., 1.),
-        theta_range=(-np.pi/3, np.pi/3) 
+        x_range=(-1.5, -1.0),
+        y_range=(-1.0, 1.0),
+        theta_range=(-np.pi / 3, np.pi / 3),
     )
     config.experiment.video_filename = f"video/diffusion_wm_trajectory_ckpt{checkpoint_version}.mp4"
     return config

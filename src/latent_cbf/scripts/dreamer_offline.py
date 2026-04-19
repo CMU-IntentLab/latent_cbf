@@ -34,6 +34,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import our modules
 from configs import DreamerConfig, Config
+from configs.paths import DREAMER_DIR
 
 class Dreamer(nn.Module):
     def __init__(self, obs_space, act_space, config, logger, dataset):
@@ -516,7 +517,7 @@ def main(config):
                     other_dataset=expert_dataset, eval_prefix="pretrain"
                 )                
                 best_pretrain_success = tools.save_checkpoint(
-                    ckpt_name, step, 0, best_pretrain_success, agent, logdir
+                    ckpt_name, step, None, best_pretrain_success, agent, logdir
                 )
 
             exp_data = next(expert_dataset)
@@ -536,7 +537,7 @@ if __name__ == "__main__":
     config.relu_weight = args.relu_weight
     config.gp_weight = args.gp_weight
     config.zs_weight = args.zs_weight
-    config.logdir = f"/data/dubins/dreamer/PyHJ/gp/relu_weight_{args.relu_weight}_gp_weight_{args.gp_weight}_zs_weight_{args.zs_weight}"
+    config.logdir = f"{DREAMER_DIR}" #/relu_weight_{args.relu_weight}_gp_weight_{args.gp_weight}_zs_weight_{args.zs_weight}"
     env_conf = Config()
 
     config.turnRate = env_conf.max_angular_velocity

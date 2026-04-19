@@ -16,7 +16,7 @@ Install instruction:
 
 3. run in terminal: pip install -e .
 
-4. run in terminal: conda install -c conda-forge ffmpeg
+4. Ensure `ffmpeg` is on your `PATH` (for example `sudo apt install ffmpeg` on Ubuntu, or `brew install ffmpeg` on macOS). The `imageio-ffmpeg` PyPI package used by the main repo also bundles binaries for many setups.
 
 
 # Some sample training scripts:

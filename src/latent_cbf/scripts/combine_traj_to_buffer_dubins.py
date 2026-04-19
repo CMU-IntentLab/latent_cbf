@@ -1,4 +1,6 @@
 import argparse
+import os
+import sys
 import cv2
 import pickle
 import numpy as np
@@ -13,6 +15,9 @@ import torch
 import numpy as np
 import functools
 import h5py
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from configs.paths import BUFFERS_DIR, TRAJS_DIR
 
 def extract_traj_from_hdf5(f):
     """
@@ -186,13 +191,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--root_dir",
         type=str,
-        default="/data/dubins/trajs",
+        default=str(TRAJS_DIR),
         help="Root directory containing Dubins HDF5 files",
     )
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="/data/dubins/buffers",
+        default=str(BUFFERS_DIR),
         help="Output directory for buffer files",
     )
     parser.add_argument(

@@ -1,8 +1,9 @@
 # Static defaults for dubins + DiffusionUnet + RobomimicResNet BC training.
 # Runtime paths and scale are set via train.py CLI.
 
-# Checkpoints, exp_config.yaml, and agent_config.yaml go under this directory
-checkpoint_dir: /data/dubins/diffusion
+# Checkpoints, exp_config.yaml, and agent_config.yaml go under this directory.
+# If null, train.py uses ``DIFFUSION_DIR`` from ``latent_cbf.configs.paths``.
+checkpoint_dir: null
 
 dropout: 0.1
 train_diffusion_steps: 100

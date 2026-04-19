@@ -8,15 +8,16 @@ Computes (margin_gp head only):
   - mean and std of |margin_gp| over all timesteps (all trajectories)
   - F1 scores: f1_safe and f1_alarm
 
-Example (checkpoint from hyperparameters, same layout as dreamer_offline.py):
+Example (checkpoint from hyperparameters, same layout as dreamer_offline.py;
+``<DATA_ROOT>`` is ``DATA_ROOT`` in ``configs.paths``):
   python wm_trajectory_stats.py \\
     --relu_weight 0.5 --zs_weight 0.05 \\
-    --traj-h5 /data/dubins/trajs/manual_none.h5
+    --traj-h5 "<DATA_ROOT>/trajs/manual_none.h5"
 
 Example (explicit file):
   python wm_trajectory_stats.py \\
-    --rssm-ckpt /data/dubins/dreamer/PyHJ/gp/relu_weight_0.5_gp_weight_10.0_zs_weight_0.05/rssm_ckpt_39999.pt \\
-    --traj-h5 /data/dubins/trajs/manual_none.h5
+    --rssm-ckpt "<DATA_ROOT>/dreamer/PyHJ/gp/relu_weight_0.5_gp_weight_10.0_zs_weight_0.05/rssm_ckpt_39999.pt" \\
+    --traj-h5 "<DATA_ROOT>/trajs/manual_none.h5"
 """
 
 from __future__ import annotations
@@ -48,6 +49,7 @@ if str(_SCRIPT_DIR) not in sys.path:
 from dreamerv3_torch import tools  # noqa: E402
 from dreamer_offline import Dreamer  # noqa: E402
 from configs import Config, DreamerConfig  # noqa: E402
+from configs.paths import DREAMER_DIR, TRAJS_DIR  # noqa: E402
 
 
 def _build_agent(config: DreamerConfig, rssm_ckpt: pathlib.Path, device: torch.device) -> Dreamer:
@@ -219,13 +221,13 @@ def main() -> None:
     p.add_argument(
         "--dreamer-root",
         type=pathlib.Path,
-        default=pathlib.Path("/data/dubins/dreamer"),
+        default=DREAMER_DIR,
         help="Root containing PyHJ/gp/... run directories",
     )
     p.add_argument(
         "--traj-h5",
         type=pathlib.Path,
-        default=pathlib.Path("/data/dubins/trajs/manual_none.h5"),
+        default=TRAJS_DIR / "manual_none.h5",
         help="HDF5 file with a 'trajectories' group",
     )
     p.add_argument("--device", type=str, default="cuda:0")

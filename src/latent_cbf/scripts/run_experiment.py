@@ -11,9 +11,15 @@ import numpy as np
 from typing import List, Dict, Any
 
 # Import our modules
-from configs import (Config, get_default_config, get_no_obstacles_config, 
-                   get_debug_config, get_mpc_config, get_mppi_config,
-                   get_diffusion_config)
+from configs import (
+    Config,
+    get_default_config,
+    get_no_obstacles_config,
+    get_debug_config,
+    get_mppi_config,
+    get_narrow_gap_config,
+    get_diffusion_config,
+)
 from controllers.factory import create_controller_from_config
 from dubins.dubins_env import DubinsEnv
 
@@ -82,18 +88,23 @@ def run_episode(env: DubinsEnv, controller, config: Config) -> Dict[str, Any]:
         print(f"Goal position: {env_config.goal_position}")
         print(f"Initial goal distance: {info['goal_distance']:.3f}")
     
-    # Reset controller if it has a reset method (MPC)
+    # Reset controller if it exposes reset (e.g. MPPI warm-start state)
     if hasattr(controller, 'reset'):
         controller.reset()
     
     # Run episode
     for step in range(exp_config.max_test_steps):
         # Compute action using controller
-        if config.controller.controller_type in ["mpc", "mppi"]:
-            action = controller.compute_action(info, env_config.get_obstacles_list(), 
-                                             np.array(env_config.goal_position))
+        if config.controller.controller_type == "mppi":
+            action = controller.compute_action(
+                info,
+                env_config.get_obstacles_list(),
+                np.array(env_config.goal_position),
+            )
+        elif config.controller.controller_type in ("diffusion", "diffusion_wm"):
+            action = controller.compute_action(info, obs)
         else:
-            action = controller.compute_action(info, env_config.get_obstacles_list())
+            raise ValueError(f"Unsupported controller {config.controller.controller_type!r}")
         actions.append(action)
         
         # Step environment
@@ -181,19 +192,21 @@ def run_experiment(config: Config) -> Dict[str, Any]:
         print(f"Environment bounds: {config.environment.world_bounds}")
         print(f"Goal position: {config.environment.goal_position}")
         print(f"Controller type: {config.controller.controller_type}")
-        if config.controller.controller_type == "mpc":
-            print(f"MPC parameters: horizon={config.controller.prediction_horizon}, "
-                  f"goal_weight={config.controller.goal_weight}, "
-                  f"obstacle_weight={config.controller.obstacle_weight}")
-        elif config.controller.controller_type == "mppi":
-            print(f"MPPI parameters: horizon={config.controller.prediction_horizon}, "
-                  f"samples={config.controller.num_samples}, "
-                  f"temperature={config.controller.temperature}, "
-                  f"goal_weight={config.controller.goal_weight}, "
-                  f"obstacle_weight={config.controller.obstacle_weight}")
+        if config.controller.controller_type == "mppi":
+            print(
+                f"MPPI parameters: horizon={config.controller.prediction_horizon}, "
+                f"samples={config.controller.num_samples}, "
+                f"temperature={config.controller.temperature}, "
+                f"goal_weight={config.controller.goal_weight}, "
+                f"obstacle_weight={config.controller.obstacle_weight}"
+            )
+        elif config.controller.controller_type in ("diffusion", "diffusion_wm"):
+            print(
+                f"Diffusion checkpoint: {config.controller.checkpoint_path} "
+                f"(type={config.controller.controller_type})"
+            )
         else:
-            print(f"Simple controller gains: goal={config.controller.goal_attraction_gain}, "
-                  f"obstacle={config.controller.obstacle_repulsion_gain}")
+            raise ValueError(f"Unsupported controller {config.controller.controller_type!r}")
         print("-" * 60)
     
     # Create environment and controller
@@ -252,7 +265,7 @@ def compare_configurations():
     configs = {
         "Default": get_default_config(),
         "No Obstacles": get_no_obstacles_config(),
-        "Narrow Gap": get_narrow_gap_config()
+        "Narrow Gap": get_narrow_gap_config(),
     }
     
     print("CONFIGURATION COMPARISON")
@@ -282,15 +295,13 @@ def compare_configurations():
 
 
 if __name__ == "__main__":
-    # Example 1: MPC Controller
-    print("Example 1: MPC Controller")
+    print("Example: MPPI controller (5 seeds)")
 
-    # run 5 times with different random seeds
     for i in range(5):
-        config = get_mpc_config()
+        config = get_mppi_config()
         config.experiment.verbose = True
         config.experiment.save_video = True
         config.experiment.env_seed = i
-        config.experiment.video_filename = f"video/mpc_config_{i}.mp4"
+        config.experiment.video_filename = f"video/mppi_example_{i}.mp4"
         results = run_experiment(config)
         print(f"Results for seed {i}: {results}")

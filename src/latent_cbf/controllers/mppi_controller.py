@@ -460,8 +460,6 @@ class MPPIController:
 
 def test_mppi_controller():
     """Test the MPPI controller with the DubinsEnv."""
-    import sys
-    sys.path.append('/home/kensuke/WM_CBF/on_policy')
     from dubins_env_outline import DubinsEnv, create_circular_obstacles
     from config import get_debug_config
     import cv2
