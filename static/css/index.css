@@ -156,14 +156,8 @@ body {
 }
 
 .publication-venue {
-    color: var(--text-secondary);
-    width: fit-content;
-    font-weight: 600;
-    background: var(--background-accent);
-    padding: 0.5rem 1rem;
-    border-radius: var(--border-radius);
-    margin-top: 1rem;
-    display: inline-block;
+    color: #ea580c;
+    font-weight: 700;
 }
 
 .publication-awards {
