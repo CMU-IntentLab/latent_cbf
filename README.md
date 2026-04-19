@@ -181,12 +181,24 @@ This repository vendors forks of three upstream projects, each retaining its ori
 
 - [dreamerv3-torch](https://github.com/NM512/dreamerv3-torch) (MIT).
 - [data4robotics](https://github.com/SudeepDasari/data4robotics) (see `diffusion4robotics/LICENSE.md`).
-- [PyHJ](https://github.com/jamesjingqili/Lipschitz_Continuous_Reachability_Learning) — Jingqi Li's Lipschitz-continuous reachability learning code.
+- [PyHJ](https://github.com/jamesjingqili/Lipschitz_Continuous_Reachability_Learning) — Modified heavily from original repository.
 
 ## License
 
-See `[LICENSE](LICENSE)` at the repository root.
+Original code in this repository is licensed under the [MIT License](LICENSE). Vendored third-party trees (`dreamerv3_torch/`, `diffusion4robotics/`, `PytorchReachability/`) remain under their respective upstream licenses; see **Acknowledgements** above.
 
 ## Citation
 
-If you use this code, please cite the upstream projects listed above. A BibTeX entry for `latent_cbf` will be added here when the accompanying paper is released.
+If you use this code, please cite the paper below.
+
+```bibtex
+@misc{nakamura2025trainlatentcontrolbarrier,
+      title={How to Train Your Latent Control Barrier Function: Smooth Safety Filtering Under Hard-to-Model Constraints},
+      author={Kensuke Nakamura and Arun L. Bishop and Steven Man and Aaron M. Johnson and Zachary Manchester and Andrea Bajcsy},
+      year={2025},
+      eprint={2511.18606},
+      archivePrefix={arXiv},
+      primaryClass={cs.RO},
+      url={https://arxiv.org/abs/2511.18606},
+}
+```

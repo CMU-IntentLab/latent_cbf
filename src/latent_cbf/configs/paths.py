@@ -19,11 +19,6 @@ DIFFUSION_DIR = DATA_ROOT / "diffusion"
 DREAMER_DIR = DATA_ROOT / "dreamer"
 BUFFERS_DIR = DATA_ROOT / "buffers"
 TRAJS_DIR = DATA_ROOT / "trajs"
-EVAL_DIR = DATA_ROOT / "eval"
-TEST_DIR = DATA_ROOT / "test"
-
-# Nested subdirectories.
-TEST_DREAMER_DIR = TEST_DIR / "dreamer"
 
 # Canonical artifact paths.
 DIFFUSION_CHECKPOINT = DIFFUSION_DIR / "dubins_diffusion_latest.ckpt"
